@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sighthound Video — Record Viewer</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Sighthound&nbsp;Video<span class="brand-sub">Record Viewer</span></div>
+    <div class="topbar-right">
+      <span id="whoami" class="whoami"></span>
+      <button id="logoutBtn" class="btn-ghost">Sign out</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Search panel -->
+    <form id="searchForm" class="panel filters">
+      <div class="filters-head">
+        <h2>Search</h2>
+        <button type="button" id="clearBtn" class="link-btn">Clear filters</button>
+      </div>
+
+      <label>Search rule
+        <select name="rule" id="ruleSelect">
+          <option value="">— use detection filters —</option>
+        </select>
+      </label>
+      <p id="ruleNote" class="rule-note">
+        Runs the rule the same way the desktop Search screen does, schedule
+        included. Camera and date range still apply; the detection filters
+        below do not.
+      </p>
+
+      <label>Camera
+        <select name="camera" id="cameraSelect"><option value="">Any</option></select>
+      </label>
+
+      <div class="row2">
+        <label>From
+          <input type="datetime-local" name="from" id="fromInput">
+        </label>
+        <label>To
+          <input type="datetime-local" name="to" id="toInput">
+        </label>
+      </div>
+
+      <div id="filterOnly">
+        <label>Free text
+          <input type="text" name="q" placeholder="camera, name, type…">
+        </label>
+
+        <label>Object type
+          <select name="type" id="typeSelect"><option value="">Any</option></select>
+        </label>
+
+        <label>Sub-type
+          <input type="text" name="subType" placeholder="dog, car, cat…">
+        </label>
+
+        <fieldset>
+          <legend>Face</legend>
+          <label>Name
+            <input type="text" name="faceName" list="faceNames" placeholder="any name">
+            <datalist id="faceNames"></datalist>
+          </label>
+          <label class="chk"><input type="checkbox" name="hasFace" value="1"> Only detections with a face</label>
+          <label>Gender
+            <select name="gender">
+              <option value="">Any</option>
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+            </select>
+          </label>
+          <div class="row2">
+            <label>Age ≥ <input type="number" name="ageMin" min="0" max="120"></label>
+            <label>Age ≤ <input type="number" name="ageMax" min="0" max="120"></label>
+          </div>
+        </fieldset>
+
+        <label class="chk"><input type="checkbox" name="nudity" value="1"> Only nudity detections</label>
+
+        <label>Min. confidence: <span id="confVal">0</span>%
+          <input type="range" name="minConfPct" id="minConfPct" min="0" max="100" value="0" step="5">
+        </label>
+
+        <!-- Travel: how far the detection moved, not how big it was.  Catches
+             what a size filter cannot -- something flickering in place at the
+             edge of frame is the same size as a real subject at distance. -->
+        <label>Min. movement: <span id="travelVal">0</span> px
+          <input type="range" name="minTravelPx" id="minTravelPx" min="0" max="500" value="0" step="10">
+        </label>
+      </div>
+
+      <label>Results per page
+        <select name="limit" id="limitSelect">
+          <option>50</option>
+          <option selected>100</option>
+          <option>200</option>
+          <option>500</option>
+        </select>
+      </label>
+
+    </form>
+
+    <!-- Results -->
+    <section class="panel results">
+      <div class="results-head">
+        <h2>Results</h2>
+        <span id="resultMeta" class="result-meta"></span>
+      </div>
+      <div id="resultsGrid" class="grid"></div>
+      <div class="pager">
+        <button id="prevPage" class="btn-ghost" disabled>‹ Prev</button>
+        <span id="pageLabel">Page 1</span>
+        <button id="nextPage" class="btn-ghost" disabled>Next ›</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Detail / player modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <button id="modalClose" class="modal-close" aria-label="Close">×</button>
+      <video id="player" controls preload="metadata"></video>
+      <div id="modalDetails" class="modal-details"></div>
+
+      <div id="enrollBlock" class="enroll-block hidden">
+        <div class="enroll-title">Add this face to the baseline</div>
+        <div class="enroll-row">
+          <input type="text" id="enrollName" list="enrollNames"
+                 placeholder="Person name (existing or new)">
+          <datalist id="enrollNames"></datalist>
+          <select id="enrollGender" title="Gender (for new people)">
+            <option value="">—</option>
+            <option value="M">M</option>
+            <option value="F">F</option>
+          </select>
+          <button id="enrollBtn" class="btn-primary">Add face</button>
+        </div>
+        <div id="enrollStatus" class="enroll-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

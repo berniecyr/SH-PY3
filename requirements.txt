@@ -1,0 +1,57 @@
+certifi==2026.1.4
+wxPython==4.2.5
+cx_Freeze==8.6.4
+insightface==0.7.3
+netifaces==0.11.0
+nudenet==3.4.2
+numpy==2.4.6
+# PyTorch — pinned for reproducible builds; also pulled in transitively by
+# ultralytics/nudenet. NOTE: this installs the CPU-only wheel from PyPI; Start.bat
+# then force-reinstalls the CUDA (cu126) build so YOLO inference runs on the GPU.
+# Without the GPU build, CPU inference starves the capture loop (low fps/drops).
+torch==2.12.1
+torchvision==0.27.1
+# OpenCV: install the headless build ONLY. opencv-python and
+# opencv-python-headless both provide the `cv2` package; having BOTH installed
+# leaves a mixed set of native DLLs that corrupts the heap and crashes the app.
+# NOTE: ultralytics pulls in opencv-python transitively, so a plain
+# `pip install -r requirements.txt` will still drag in the full build. After
+# installing, normalize to headless only:   pip uninstall -y opencv-python
+# (the app + ultralytics run fine on headless; the app renders via wx, not cv2).
+opencv_python_headless==4.13.0.92
+Pillow==12.2.0
+py2exe==0.14.1.1
+PyAudio==0.2.14
+# Windows service support: the SHLaunchPY3 service (launch/SHLaunchService.py)
+# runs the back end so recording survives closing the front end. pywin32 also
+# supplies pythonservice.exe, which hosts it. After installing, run
+# `python venv\Scripts\pywin32_postinstall.py -install` from an ELEVATED prompt
+# once, or the service fails to start with a bare "Error 1053".
+pywin32==312
+sounddevice==0.5.5
+PyOpenGL==3.1.10
+Requests==2.34.2
+ultralytics==8.4.14
+# ffmpeg binary used for clip recording/muxing — StreamReader/ClipUtils/ClipReader
+# spawn it via imageio_ffmpeg.get_ffmpeg_exe(). ffmpeg is NOT on PATH or bundled,
+# so without this no .mp4 clips are ever written (only thumbnails).
+imageio-ffmpeg==0.6.0
+# Used by the stream-copy recorder to kill orphaned ffmpeg children at startup
+# (a hard-terminated camera process leaves its ffmpeg holding the camera's RTSP
+# session). Also pulled in transitively by ultralytics; pinned for our direct use.
+psutil==7.2.2
+# NOTE — onnxruntime (face/nudity inference): nudenet installs the CPU-only
+# 'onnxruntime'. Start.bat swaps it for onnxruntime-gpu==1.22.0 AFTER this file
+# installs — 1.22 is the CUDA-12 build that pairs with torch cu126's bundled
+# DLLs (1.27+ is CUDA-13 and fails to load). Do not add onnxruntime here.
+kokoro-onnx
+soundfile
+pychromecast
+# Tapo camera control (siren + white spotlight buttons on the monitor screen,
+# see vitaToolbox/networking/TapoControl.py). Talks to the camera's local HTTPS
+# API on port 443. Pulls in pycryptodome, rtp and python-kasa (which brings
+# aiohttp + cryptography); requests/urllib3 it also needs are already pinned
+# above. NOTE: Start.bat only runs "pip install -r requirements.txt" when it
+# CREATES the venv, so an existing install needs a one-off
+# "venv\Scripts\python.exe -m pip install pytapo==3.4.18".
+pytapo==3.4.18

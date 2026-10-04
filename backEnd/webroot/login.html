@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sighthound Video — Sign in</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="login-body">
+  <form id="loginForm" class="login-card" autocomplete="on">
+    <div class="login-logo">Sighthound&nbsp;Video</div>
+    <div class="login-sub">Record Viewer · LAN access</div>
+
+    <label for="user">Username</label>
+    <input id="user" name="user" type="text" autocomplete="username" required autofocus>
+
+    <label for="pass">Password</label>
+    <input id="pass" name="pass" type="password" autocomplete="current-password" required>
+
+    <button id="loginBtn" type="submit">Sign in</button>
+    <div id="loginError" class="login-error" role="alert"></div>
+  </form>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const errBox = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: document.getElementById('user').value,
+            pass: document.getElementById('pass').value
+          })
+        });
+        if (res.ok) {
+          window.location.href = '/';
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        errBox.textContent = data.error || 'Sign in failed.';
+      } catch (ex) {
+        errBox.textContent = 'Cannot reach the server.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    });
+  </script>
+</body>
+</html>

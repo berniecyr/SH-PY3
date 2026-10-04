@@ -1,0 +1,803 @@
+<meta charset="utf-8">
+<title>Sighthound Video — Data Reference</title>
+<style>
+  :root{
+    --ground:#EEF1F4;
+    --panel:#FFFFFF;
+    --panel-2:#E4E9EE;
+    --ink:#1B2430;
+    --ink-dim:#4C5A6B;
+    --ink-faint:#7C8898;
+    --line:#CCD4DC;
+    --line-soft:#DEE4EA;
+    --accent:#B9701F;
+    --accent-ink:#7A4A14;
+    --accent-soft:#F3DFC3;
+    --fk:#24626F;
+    --fk-soft:#D6E9EC;
+    --idx:#6B5FA8;
+    --idx-soft:#E4E0F2;
+    --dep:#A6504F;
+    --dep-soft:#F1DEDD;
+    --shadow: 0 1px 2px rgba(27,36,48,.06), 0 8px 24px -12px rgba(27,36,48,.18);
+    --radius: 3px;
+    --font-display: "Bahnschrift SemiBold", "Bahnschrift", "SF Compact Display", "Segoe UI Semibold", "Segoe UI", Arial, sans-serif;
+    --font-body: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Noto Serif", serif;
+    --font-mono: "Cascadia Code", Consolas, "SF Mono", "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ground:#10151D;
+      --panel:#161D27;
+      --panel-2:#1D2530;
+      --ink:#DCE3EA;
+      --ink-dim:#9DAAB8;
+      --ink-faint:#6C7889;
+      --line:#2B3542;
+      --line-soft:#212A35;
+      --accent:#E0A053;
+      --accent-ink:#F3D9AE;
+      --accent-soft:#3A2B15;
+      --fk:#63B4C4;
+      --fk-soft:#173038;
+      --idx:#A79AE0;
+      --idx-soft:#251F3A;
+      --dep:#D68786;
+      --dep-soft:#331E1E;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#10151D; --panel:#161D27; --panel-2:#1D2530;
+    --ink:#DCE3EA; --ink-dim:#9DAAB8; --ink-faint:#6C7889;
+    --line:#2B3542; --line-soft:#212A35;
+    --accent:#E0A053; --accent-ink:#F3D9AE; --accent-soft:#3A2B15;
+    --fk:#63B4C4; --fk-soft:#173038;
+    --idx:#A79AE0; --idx-soft:#251F3A;
+    --dep:#D68786; --dep-soft:#331E1E;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 28px -14px rgba(0,0,0,.6);
+  }
+  :root[data-theme="light"]{
+    --ground:#EEF1F4; --panel:#FFFFFF; --panel-2:#E4E9EE;
+    --ink:#1B2430; --ink-dim:#4C5A6B; --ink-faint:#7C8898;
+    --line:#CCD4DC; --line-soft:#DEE4EA;
+    --accent:#B9701F; --accent-ink:#7A4A14; --accent-soft:#F3DFC3;
+    --fk:#24626F; --fk-soft:#D6E9EC;
+    --idx:#6B5FA8; --idx-soft:#E4E0F2;
+    --dep:#A6504F; --dep-soft:#F1DEDD;
+    --shadow: 0 1px 2px rgba(27,36,48,.06), 0 8px 24px -12px rgba(27,36,48,.18);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:16px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{ font-family:var(--font-display); text-wrap:balance; margin:0; }
+  a{ color:var(--fk); }
+  a:focus-visible, button:focus-visible, summary:focus-visible{
+    outline:2px solid var(--fk); outline-offset:2px;
+  }
+
+  .page{
+    max-width:1180px;
+    margin:0 auto;
+    padding:0 24px 96px;
+  }
+
+  /* ---------- Masthead ---------- */
+  .masthead{
+    padding:40px 0 28px;
+    border-bottom:1px solid var(--line);
+    display:flex; flex-wrap:wrap; gap:28px; align-items:flex-end; justify-content:space-between;
+  }
+  .masthead-title{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-stretch:condensed;
+    letter-spacing:.2px;
+    font-size:clamp(28px, 4vw, 40px);
+    line-height:1.05;
+    color:var(--ink);
+  }
+  .masthead-title small{
+    display:block;
+    font-family:var(--font-mono);
+    font-weight:400;
+    font-size:13px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--accent-ink);
+    margin-bottom:8px;
+  }
+  .masthead-sub{
+    max-width:46ch;
+    color:var(--ink-dim);
+    font-size:15px;
+  }
+  .masthead-meta{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--ink-faint);
+    text-align:right;
+    line-height:1.7;
+    white-space:nowrap;
+  }
+  .masthead-meta .n{ font-variant-numeric:tabular-nums; color:var(--ink-dim); }
+
+  /* ---------- Layout: nav + content ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns:200px minmax(0,1fr);
+    gap:40px;
+    margin-top:32px;
+    align-items:start;
+  }
+  @media (max-width: 860px){
+    .layout{ grid-template-columns:1fr; }
+    .side{ position:static !important; order:2; }
+  }
+  .side{
+    position:sticky;
+    top:24px;
+    display:flex; flex-direction:column; gap:2px;
+    font-family:var(--font-mono);
+    font-size:12.5px;
+  }
+  .side-group{ margin-bottom:14px; }
+  .side-label{
+    text-transform:uppercase; letter-spacing:.08em; font-size:10.5px;
+    color:var(--ink-faint); margin-bottom:6px; padding-left:10px;
+  }
+  .side a{
+    display:flex; justify-content:space-between; gap:8px;
+    text-decoration:none; color:var(--ink-dim);
+    padding:5px 10px; border-left:2px solid transparent;
+    border-radius:0 var(--radius) var(--radius) 0;
+  }
+  .side a:hover{ color:var(--ink); background:var(--panel-2); }
+  .side a .n{ color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+  .main{ min-width:0; }
+
+  /* ---------- Overview diagram ---------- */
+  .overview{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:24px 24px 20px;
+    margin-bottom:44px;
+  }
+  .overview h2{ font-size:13px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-faint); margin-bottom:16px; }
+  .diagram{ width:100%; height:auto; display:block; }
+  .diagram text{ font-family:var(--font-mono); }
+  .diagram .db-label{ font-family:var(--font-display); font-weight:700; }
+  .overview-note{
+    margin-top:18px; padding-top:16px; border-top:1px dashed var(--line);
+    font-size:13.5px; color:var(--ink-dim);
+  }
+  .overview-note strong{ color:var(--ink); }
+
+  /* ---------- Section headers ---------- */
+  .store-section{ margin-bottom:52px; }
+  .store-head{
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding-bottom:10px; margin-bottom:20px; border-bottom:2px solid var(--ink);
+  }
+  .store-head h2{
+    font-size:22px; font-weight:700; letter-spacing:.2px;
+  }
+  .store-kind{
+    font-family:var(--font-mono); font-size:11.5px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--panel); background:var(--ink-dim);
+    padding:2px 7px; border-radius:2px;
+  }
+  .store-path{
+    font-family:var(--font-mono); font-size:12px; color:var(--ink-faint);
+    margin-left:auto;
+  }
+  .store-desc{ color:var(--ink-dim); font-size:14.5px; max-width:74ch; margin-bottom:22px; }
+
+  /* ---------- Table cards ---------- */
+  .cards{ display:flex; flex-direction:column; gap:20px; }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+  .card-head{
+    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+    padding:14px 20px; background:var(--panel-2);
+    border-bottom:1px solid var(--line);
+  }
+  .card-head h3{
+    font-family:var(--font-mono); font-weight:600; font-size:16px; color:var(--ink);
+  }
+  .card-purpose{ font-size:13.5px; color:var(--ink-dim); font-style:italic; }
+  .card-count{
+    margin-left:auto; font-family:var(--font-mono); font-size:12px;
+    color:var(--ink-faint); white-space:nowrap;
+  }
+  .card-count .n{ font-variant-numeric:tabular-nums; color:var(--ink-dim); font-weight:600; }
+
+  .ledger-wrap{ overflow-x:auto; }
+  table.ledger{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  table.ledger th{
+    text-align:left; font-family:var(--font-mono); font-weight:600;
+    text-transform:uppercase; letter-spacing:.06em; font-size:10.5px;
+    color:var(--ink-faint); padding:9px 20px; border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  table.ledger td{
+    padding:9px 20px; border-bottom:1px solid var(--line-soft);
+    vertical-align:top;
+  }
+  table.ledger tr:last-child td{ border-bottom:none; }
+  td.col-name{ font-family:var(--font-mono); font-weight:600; color:var(--ink); white-space:nowrap; }
+  td.col-type{ font-family:var(--font-mono); color:var(--ink-dim); white-space:nowrap; }
+  td.col-desc{ color:var(--ink-dim); }
+  td.col-flags{ white-space:nowrap; }
+
+  .tag{
+    display:inline-block; font-family:var(--font-mono); font-size:10px;
+    font-weight:600; letter-spacing:.03em; padding:1.5px 6px; border-radius:2px;
+    margin-right:4px; line-height:1.5;
+  }
+  .tag-pk{ background:var(--accent-soft); color:var(--accent-ink); }
+  .tag-fk{ background:var(--fk-soft); color:var(--fk); border:1px dashed var(--fk); }
+  .tag-idx{ background:var(--idx-soft); color:var(--idx); }
+  .tag-dep{ background:var(--dep-soft); color:var(--dep); }
+
+  .card-foot{
+    padding:10px 20px; border-top:1px solid var(--line);
+    font-family:var(--font-mono); font-size:11.5px; color:var(--ink-faint);
+    background:var(--panel-2);
+  }
+  .card-foot b{ color:var(--ink-dim); font-weight:600; }
+
+  /* ---------- Non-SQL ledger cards (key: value stores) ---------- */
+  .kv-card .ledger td.col-name{ white-space:normal; }
+  .kv-note{ padding:12px 20px; font-size:13px; color:var(--ink-dim); border-top:1px dashed var(--line); }
+
+  /* ---------- Callout ---------- */
+  .callout{
+    background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--accent);
+    border-radius:0 var(--radius) var(--radius) 0; box-shadow:var(--shadow);
+    padding:18px 22px; margin:44px 0; font-size:14px; color:var(--ink-dim);
+  }
+  .callout h3{ font-size:14px; color:var(--ink); margin-bottom:8px; }
+  .callout code{ font-family:var(--font-mono); font-size:12.5px; background:var(--panel-2); padding:1px 5px; border-radius:2px; color:var(--ink); }
+
+  footer.colophon{
+    margin-top:56px; padding-top:20px; border-top:1px solid var(--line);
+    font-family:var(--font-mono); font-size:11.5px; color:var(--ink-faint);
+  }
+
+  @media (prefers-reduced-motion: no-preference){
+    .card, .overview{ animation:rise .4s ease-out both; }
+    .cards .card:nth-child(2){ animation-delay:.03s; }
+    .cards .card:nth-child(3){ animation-delay:.06s; }
+    .cards .card:nth-child(4){ animation-delay:.09s; }
+  }
+  @keyframes rise{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none; } }
+</style>
+
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <div class="masthead-title">
+        <small>Sighthound Video · Py3 build</small>
+        Data Reference
+      </div>
+      <p class="masthead-sub">Every table, pickle store and config file the app persists to disk — what it holds, how the pieces relate, and what's just historical cruft.</p>
+    </div>
+    <div class="masthead-meta">
+      generated from a live install &middot; re-read 2026-08-16<br>
+      <span class="n">G:\Documents\Programming\Sighthound Py3 2026-08-15-1143</span><br>
+      data dir <span class="n">%LOCALAPPDATA%\Sighthound Video Py3</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="side">
+      <div class="side-group">
+        <div class="side-label">SQLite databases</div>
+        <a href="#objdb2">objdb2 <span class="n">4 tbl</span></a>
+        <a href="#clipdb">clipdb <span class="n">3 tbl</span></a>
+        <a href="#responsedb">responsedb <span class="n">3 tbl</span></a>
+      </div>
+      <div class="side-group">
+        <div class="side-label">Pickle / JSON stores</div>
+        <a href="#camdb">camdb</a>
+        <a href="#backendprefs">backEndPrefs</a>
+        <a href="#guiprefs">Gui Prefs.pkl</a>
+        <a href="#knownfaces">known_faces.dat</a>
+        <a href="#rules">rules\*.rule / *.query</a>
+        <a href="#imagecheck">imagecheck_config.json</a>
+        <a href="#ihost">ihost_config.json</a>
+      </div>
+      <div class="side-group">
+        <div class="side-label">Runtime buffers</div>
+        <a href="#live">live\</a>
+      </div>
+      <div class="side-group">
+        <div class="side-label">Legend</div>
+        <span style="padding:5px 10px; display:flex; gap:6px; align-items:center;"><span class="tag tag-pk">PK</span> primary key</span>
+        <span style="padding:5px 10px; display:flex; gap:6px; align-items:center;"><span class="tag tag-fk">FK</span> informal link</span>
+        <span style="padding:5px 10px; display:flex; gap:6px; align-items:center;"><span class="tag tag-idx">IDX</span> indexed</span>
+        <span style="padding:5px 10px; display:flex; gap:6px; align-items:center;"><span class="tag tag-dep">DEP</span> unused</span>
+      </div>
+    </nav>
+
+    <div class="main">
+
+      <div class="overview">
+        <h2>How the stores relate</h2>
+        <svg class="diagram" viewBox="0 0 1080 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagram of the four SQLite databases and how they relate by camera location and object id">
+          <defs>
+            <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" fill="var(--ink-faint)"></path>
+            </marker>
+          </defs>
+          <!-- connectors -->
+          <path d="M 190 70 H 330" stroke="var(--fk)" stroke-width="1.5" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 190 130 H 330" stroke="var(--ink-faint)" stroke-width="1.5" stroke-dasharray="3 3" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 460 100 V 230 H 330" stroke="var(--ink-faint)" stroke-width="1.5" stroke-dasharray="3 3" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 460 70 H 620" stroke="var(--fk)" stroke-width="1.5" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 750 100 V 230 H 620" stroke="var(--ink-faint)" stroke-width="1.5" stroke-dasharray="3 3" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 880 70 H 750" stroke="var(--ink-faint)" stroke-width="1.5" stroke-dasharray="3 3" fill="none" marker-end="url(#arrow)"></path>
+
+          <!-- objdb2 -->
+          <g>
+            <rect x="20" y="40" width="170" height="60" rx="3" fill="var(--panel-2)" stroke="var(--line)"></rect>
+            <text x="35" y="63" class="db-label" font-size="15" fill="var(--ink)">objdb2</text>
+            <text x="35" y="82" font-size="11" fill="var(--ink-dim)">objects · motion · attrs</text>
+          </g>
+          <!-- clipdb -->
+          <g>
+            <rect x="330" y="40" width="130" height="60" rx="3" fill="var(--panel-2)" stroke="var(--line)"></rect>
+            <text x="345" y="63" class="db-label" font-size="15" fill="var(--ink)">clipdb</text>
+            <text x="345" y="82" font-size="11" fill="var(--ink-dim)">recorded segments</text>
+          </g>
+          <!-- responsedb -->
+          <g>
+            <rect x="620" y="40" width="130" height="60" rx="3" fill="var(--panel-2)" stroke="var(--line)"></rect>
+            <text x="635" y="63" class="db-label" font-size="15" fill="var(--ink)">responsedb</text>
+            <text x="635" y="82" font-size="11" fill="var(--ink-dim)">delivery queue</text>
+          </g>
+          <!-- camdb -->
+          <g>
+            <rect x="880" y="40" width="170" height="60" rx="3" fill="var(--panel-2)" stroke="var(--dep)" stroke-dasharray="2 2"></rect>
+            <text x="895" y="63" class="db-label" font-size="15" fill="var(--ink)">camdb</text>
+            <text x="895" y="82" font-size="11" fill="var(--ink-dim)">camera roster (pickle)</text>
+          </g>
+
+          <text x="205" y="66" font-size="10.5" fill="var(--fk)">camLoc + ms range</text>
+          <text x="205" y="126" font-size="10.5" fill="var(--ink-faint)">objUid (no FK)</text>
+          <text x="475" y="66" font-size="10.5" fill="var(--fk)">objList (pickled ids)</text>
+
+          <!-- lower row: known_faces + configs -->
+          <rect x="20" y="220" width="310" height="50" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="2 2"></rect>
+          <text x="35" y="240" font-size="12.5" font-weight="600" fill="var(--ink-dim)">known_faces.dat</text>
+          <text x="35" y="257" font-size="10.5" fill="var(--ink-faint)">joined only by matching faceName text</text>
+
+          <rect x="750" y="220" width="130" height="50" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="2 2"></rect>
+          <text x="765" y="240" font-size="12.5" font-weight="600" fill="var(--ink-dim)">prefs / config</text>
+          <text x="765" y="257" font-size="10.5" fill="var(--ink-faint)">no observational data</text>
+        </svg>
+        <div class="overview-note">
+          <strong>Every camera location string (<code style="font-family:var(--font-mono)">camLoc</code>) is the join key</strong> across objdb2, clipdb and camdb — there is no numeric camera id anywhere in the schema. Dashed lines above are relationships the application code resolves at query time; solid lines are the two places a value is copied wholesale from one store into another.
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <section class="store-section" id="objdb2">
+        <div class="store-head">
+          <h2>objdb2</h2>
+          <span class="store-kind">SQLite</span>
+          <span class="store-path">videos\objdb2</span>
+        </div>
+        <p class="store-desc">The detection ledger. Every tracked object a camera reports lands here — its bounding-box track frame by frame, and, for people, a sidecar of face/nudity attributes layered on top without disturbing the object's core classification.</p>
+
+        <div class="cards">
+          <article class="card">
+            <div class="card-head">
+              <h3>objects</h3>
+              <span class="card-purpose">one row per tracked object</span>
+              <span class="card-count">rows <span class="n">55,775</span></span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">uid</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK</span></td><td class="col-desc">object identifier, referenced by every other table below</td></tr>
+              <tr><td class="col-name">camLoc</td><td class="col-type">TEXT</td><td class="col-flags"><span class="tag tag-idx">IDX</span></td><td class="col-desc">camera location name — the only camera key in the whole schema</td></tr>
+              <tr><td class="col-name">timeStart / timeStop</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-idx">IDX</span></td><td class="col-desc">absolute epoch-ms the object was first / last seen</td></tr>
+              <tr><td class="col-name">type</td><td class="col-type">TEXT</td><td></td><td class="col-desc">classification: <code style="font-family:var(--font-mono)">person</code> · <code style="font-family:var(--font-mono)">animal</code> · <code style="font-family:var(--font-mono)">vehicle</code> · <code style="font-family:var(--font-mono)">object</code> (never literally "unknown")</td></tr>
+              <tr><td class="col-name">minWidth / maxWidth</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">narrowest / widest the bounding box got over the track</td></tr>
+              <tr><td class="col-name">minHeight / maxHeight</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">shortest / tallest the bounding box got over the track</td></tr>
+              <tr><td class="col-name">fileName</td><td class="col-type">TEXT</td><td class="col-flags"><span class="tag tag-dep">DEP</span></td><td class="col-desc">superseded by clipdb; kept only so old rows still parse</td></tr>
+              <tr><td class="col-name">rX1, rY1, rX2, rY2</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-dep">DEP</span></td><td class="col-desc">unused region coordinates</td></tr>
+              <tr><td class="col-name">confidence</td><td class="col-type">REAL</td><td class="col-flags"><span class="tag tag-dep">DEP</span></td><td class="col-desc">superseded by objectAttributes.detConf</td></tr>
+              <tr><td class="col-name">thumbnail</td><td class="col-type">BLOB</td><td class="col-flags"><span class="tag tag-dep">DEP</span></td><td class="col-desc">unused image cache</td></tr>
+            </table></div>
+            <div class="card-foot"><b>index</b> IDX_OBJECTS_STOP (timeStop)</div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>motion</h3>
+              <span class="card-purpose">per-frame bounding box for a tracked object</span>
+              <span class="card-count">rows <span class="n">1,467,929</span></span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">objUid</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK¹</span> <span class="tag tag-fk">FK</span></td><td class="col-desc">→ objects.uid — which object this frame belongs to</td></tr>
+              <tr><td class="col-name">time</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK¹</span></td><td class="col-desc">epoch-ms of this frame</td></tr>
+              <tr><td class="col-name">frame</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">frame number within the recording</td></tr>
+              <tr><td class="col-name">x1, y1, x2, y2</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">bounding box, top-left / bottom-right</td></tr>
+            </table></div>
+            <div class="card-foot">¹ composite primary key <b>(objUid, time)</b> — 26 rows per object on average</div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>objectAttributes</h3>
+              <span class="card-purpose">face &amp; nudity sidecar, one row per object</span>
+              <span class="card-count">rows <span class="n">3,327</span></span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">objUid</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK</span> <span class="tag tag-fk">FK</span></td><td class="col-desc">→ objects.uid, 1:1 — added later, so most objects have no row here at all</td></tr>
+              <tr><td class="col-name">faceName</td><td class="col-type">TEXT</td><td></td><td class="col-desc">recognized name, or NULL if unrecognized</td></tr>
+              <tr><td class="col-name">faceConf</td><td class="col-type">REAL</td><td></td><td class="col-desc">recognition similarity for faceName</td></tr>
+              <tr><td class="col-name">faceDetConf</td><td class="col-type">REAL</td><td></td><td class="col-desc">set whenever <em>any</em> face was seen, recognized or not — this is what "a face was present" means</td></tr>
+              <tr><td class="col-name">gender / age</td><td class="col-type">TEXT / INTEGER</td><td></td><td class="col-desc">demographic estimate from the best face frame</td></tr>
+              <tr><td class="col-name">subType</td><td class="col-type">TEXT</td><td></td><td class="col-desc">specific class, e.g. dog / car, kept from the highest-confidence frame</td></tr>
+              <tr><td class="col-name">detConf</td><td class="col-type">REAL</td><td></td><td class="col-desc">peak detection confidence across the whole track</td></tr>
+              <tr><td class="col-name">nudity</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">0/1 — flagged true if any frame tripped a NudeNet class</td></tr>
+              <tr><td class="col-name">nudityDetail</td><td class="col-type">TEXT</td><td></td><td class="col-desc">"CLASS=score,…" from the highest-scoring frame</td></tr>
+            </table></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>actions</h3>
+              <span class="card-purpose">action-in-progress ranges (walking, running…)</span>
+              <span class="card-count">rows <span class="n">0</span> — currently unused</span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">objUid</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-fk">FK</span></td><td class="col-desc">→ objects.uid</td></tr>
+              <tr><td class="col-name">type</td><td class="col-type">TEXT</td><td></td><td class="col-desc">duplicated from objects.type, purely so this table can be searched alone</td></tr>
+              <tr><td class="col-name">action</td><td class="col-type">TEXT</td><td></td><td class="col-desc">e.g. "walking" — no current detector emits this</td></tr>
+              <tr><td class="col-name">frameStart / frameStop</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">frame range the action covers (inclusive)</td></tr>
+              <tr><td class="col-name">timeStart / timeStop</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">epoch-ms for the same range</td></tr>
+            </table></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section class="store-section" id="clipdb">
+        <div class="store-head">
+          <h2>clipdb</h2>
+          <span class="store-kind">SQLite</span>
+          <span class="store-path">videos\clipdb</span>
+        </div>
+        <p class="store-desc">The tape index. One row per recorded video file, chained to its neighbors so playback can cross segment boundaries without a gap.</p>
+
+        <div class="cards">
+          <article class="card">
+            <div class="card-head">
+              <h3>clips</h3>
+              <span class="card-purpose">one row per recorded video segment</span>
+              <span class="card-count">rows <span class="n">36,170</span></span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">uid</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK</span></td><td class="col-desc">clip identifier</td></tr>
+              <tr><td class="col-name">filename</td><td class="col-type">TEXT</td><td class="col-flags"><span class="tag tag-idx">IDX</span></td><td class="col-desc">video file name on disk</td></tr>
+              <tr><td class="col-name">camLoc</td><td class="col-type">TEXT</td><td class="col-flags"><span class="tag tag-idx">IDX</span></td><td class="col-desc">camera location — joins to objdb2.objects.camLoc</td></tr>
+              <tr><td class="col-name">firstMs / lastMs</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-idx">IDX</span></td><td class="col-desc">epoch-ms range the file covers</td></tr>
+              <tr><td class="col-name">prevFile / nextFile</td><td class="col-type">TEXT</td><td class="col-flags"><span class="tag tag-idx">IDX</span></td><td class="col-desc">adjoining segment names, for seamless multi-file playback</td></tr>
+              <tr><td class="col-name">tags</td><td class="col-type">BLOB</td><td></td><td class="col-desc">pickled dict of ad-hoc tag/value pairs</td></tr>
+              <tr><td class="col-name">isCache</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-idx">IDX</span></td><td class="col-desc">1 if this segment lives in the rolling cache rather than permanent storage</td></tr>
+              <tr><td class="col-name">procWidth / procHeight</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">resolution frames were analyzed at (0 = unset / native)</td></tr>
+            </table></div>
+            <div class="card-foot"><b>indices</b> (camLoc, firstMs) · (camLoc, lastMs) · (filename, camLoc) · (isCache, firstMs) · (prevFile) · (nextFile)</div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>clipProcSizes</h3>
+              <span class="card-purpose">history of the resolution used to analyze each camera</span>
+              <span class="card-count">rows <span class="n">19</span></span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th>meaning</th></tr>
+              <tr><td class="col-name">camLoc</td><td class="col-type">TEXT</td><td class="col-desc">camera location</td></tr>
+              <tr><td class="col-name">firstMs</td><td class="col-type">INTEGER</td><td class="col-desc">epoch-ms this processing size took effect from</td></tr>
+              <tr><td class="col-name">procWidth / procHeight</td><td class="col-type">INTEGER</td><td class="col-desc">analysis resolution in effect from that point on</td></tr>
+            </table></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>clipPadding</h3>
+              <span class="card-purpose">history of the pre/post-roll padding setting</span>
+              <span class="card-count">rows <span class="n">0</span> — currently unused</span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">updateTime</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK</span></td><td class="col-desc">epoch-ms the setting changed</td></tr>
+              <tr><td class="col-name">paddingSec</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">seconds of padding around a clip's active range</td></tr>
+            </table></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section class="store-section" id="responsedb">
+        <div class="store-head">
+          <h2>responsedb</h2>
+          <span class="store-kind">SQLite</span>
+          <span class="store-path">videos\responsedb</span>
+        </div>
+        <p class="store-desc">The outbox. A durable queue so slow deliveries (FTP export, mobile push) survive an app restart instead of silently dropping.</p>
+
+        <div class="cards">
+          <article class="card">
+            <div class="card-head">
+              <h3>clipsToSend</h3>
+              <span class="card-purpose">clips waiting on FTP / local-export delivery</span>
+              <span class="card-count">rows <span class="n">0</span> — queue drains fast</span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">uid</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK</span></td><td class="col-desc">queue-entry id</td></tr>
+              <tr><td class="col-name">protocol</td><td class="col-type">TEXT</td><td></td><td class="col-desc">"ftp" or "localExport"</td></tr>
+              <tr><td class="col-name">camLoc / ruleName</td><td class="col-type">TEXT</td><td></td><td class="col-desc">which camera and rule generated this delivery</td></tr>
+              <tr><td class="col-name">startTime / stopTime</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">epoch-ms range of the clip to send</td></tr>
+              <tr><td class="col-name">playStart / previewMs</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">playback start offset and preview-frame timestamp</td></tr>
+              <tr><td class="col-name">objList</td><td class="col-type">BLOB</td><td class="col-flags"><span class="tag tag-fk">FK</span></td><td class="col-desc">pickled list of object ids — informal link to objdb2.objects.uid</td></tr>
+              <tr><td class="col-name">startList</td><td class="col-type">BLOB</td><td></td><td class="col-desc">pickled list of per-object start times</td></tr>
+              <tr><td class="col-name">failures</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">retry count so far</td></tr>
+              <tr><td class="col-name">processAt</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">epoch-ms not to attempt delivery before</td></tr>
+            </table></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>lastSentInfo</h3>
+              <span class="card-purpose">bookmark of the last clip delivered, per protocol</span>
+              <span class="card-count">rows <span class="n">1</span></span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">protocol</td><td class="col-type">TEXT</td><td class="col-flags"><span class="tag tag-pk">PK</span></td><td class="col-desc">"ftp" or "localExport" — one row exists per protocol ever used</td></tr>
+              <tr><td class="col-name">startTime / stopTime</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">range of the last clip successfully sent</td></tr>
+              <tr><td class="col-name">sentAt / processAt</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">when it was sent, and when it was queued</td></tr>
+              <tr><td class="col-name">ruleName</td><td class="col-type">TEXT</td><td></td><td class="col-desc">rule that produced it</td></tr>
+            </table></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>pushNotifications</h3>
+              <span class="card-purpose">queued mobile push notifications</span>
+              <span class="card-count">rows <span class="n">0</span> — feature currently unused</span>
+            </div>
+            <div class="ledger-wrap"><table class="ledger">
+              <tr><th>column</th><th>type</th><th></th><th>meaning</th></tr>
+              <tr><td class="col-name">uid</td><td class="col-type">INTEGER</td><td class="col-flags"><span class="tag tag-pk">PK</span></td><td class="col-desc">auto-increment notification id</td></tr>
+              <tr><td class="col-name">content</td><td class="col-type">TEXT</td><td></td><td class="col-desc">user-facing notification text</td></tr>
+              <tr><td class="col-name">data</td><td class="col-type">TEXT</td><td></td><td class="col-desc">JSON-encoded payload for the mobile client</td></tr>
+              <tr><td class="col-name">createdAt</td><td class="col-type">INTEGER</td><td></td><td class="col-desc">epoch-ms created</td></tr>
+            </table></div>
+          </article>
+        </div>
+      </section>
+
+      <div class="callout">
+        <h3>No declared foreign keys anywhere</h3>
+        None of the four databases above uses an SQL <code>FOREIGN KEY</code> constraint. Every cross-table link — <code>motion.objUid → objects.uid</code>, <code>clips.camLoc ↔ objects.camLoc</code>, <code>clipsToSend.objList → objects.uid</code> — is convention enforced only by application code. It's workable because nothing here ever deletes a referenced row out from under a dependent one; it does mean a hand-edited row can silently orphan its children.
+      </div>
+
+      <!-- ============================================================ -->
+      <section class="store-section" id="camdb">
+        <div class="store-head">
+          <h2>camdb</h2>
+          <span class="store-kind">pickle</span>
+          <span class="store-path">camdb</span>
+        </div>
+        <p class="store-desc">The camera roster. Not SQLite — a single pickled <code style="font-family:var(--font-mono)">dict</code> keyed by camera location, one entry per configured camera (22 on this install).</p>
+        <div class="cards"><article class="card kv-card">
+          <div class="card-head"><h3>dict[camLoc]</h3><span class="card-purpose">→ per-camera settings</span></div>
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>key</th><th>type</th><th>meaning</th></tr>
+            <tr><td class="col-name">type</td><td class="col-type">str</td><td class="col-desc">camera driver, e.g. ONVIF / RTSP</td></tr>
+            <tr><td class="col-name">enabled</td><td class="col-type">bool</td><td class="col-desc">whether the camera is currently active</td></tr>
+            <tr><td class="col-name">uri</td><td class="col-type">str</td><td class="col-desc">connection URI — often carries credentials in plain text</td></tr>
+            <tr><td class="col-name">extra</td><td class="col-type">dict</td><td class="col-desc">secondary settings, including <code style="font-family:var(--font-mono)">frozen</code> (auto-disabled after repeated failures) and per-camera recording overrides</td></tr>
+          </table></div>
+          <div class="kv-note">Backed up to dated <code style="font-family:var(--font-mono)">camdb YYYY-MM-DD HHMMSS</code> snapshots on write; the newest few are kept, older ones pruned.</div>
+        </article></div>
+      </section>
+
+      <section class="store-section" id="backendprefs">
+        <div class="store-head">
+          <h2>backEndPrefs</h2>
+          <span class="store-kind">pickle</span>
+          <span class="store-path">backEndPrefs</span>
+        </div>
+        <p class="store-desc">App-wide backend settings — one flat dict, read once at startup and rewritten whole on any change.</p>
+        <div class="cards"><article class="card kv-card">
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>key</th><th>meaning</th></tr>
+            <tr><td class="col-name">dataDir / videoDir</td><td class="col-desc">where the databases above and the recorded video actually live</td></tr>
+            <tr><td class="col-name">maxStorageSize / cacheDuration</td><td class="col-desc">storage budget (GB) and rolling-cache retention (hours)</td></tr>
+            <tr><td class="col-name">clip* (Timestamps, BoundingBoxes, MergeThreshold, StreamResolution, VideoQualityProfile)</td><td class="col-desc">recording/export presentation settings</td></tr>
+            <tr><td class="col-name">live* (EnableFastStart, EnableTimestamp, MaxBitrate, MaxResolution)</td><td class="col-desc">live-view streaming settings</td></tr>
+            <tr><td class="col-name">webPort / webAuth / portOpenerEnabled</td><td class="col-desc">LAN record-viewer access (webAuth is a salted hash, not plaintext)</td></tr>
+            <tr><td class="col-name">ftpSettings</td><td class="col-desc">dict: host, port, user, password, directory, isPassive</td></tr>
+            <tr><td class="col-name">emailSettings</td><td class="col-desc">dict: host, port, user, password, encryption, fromAddr, toAddrs, imageInline</td></tr>
+            <tr><td class="col-name">notificationSettings</td><td class="col-desc">dict: enabled, gatewayUserName, gatewayPassword, gatewayGUID (mobile push gateway)</td></tr>
+            <tr><td class="col-name">licenseSettings</td><td class="col-desc">dict: authToken, lastUser, accountID</td></tr>
+            <tr><td class="col-name">armSettings</td><td class="col-desc">dict: wantArmDelay, armDelayMinutes, camerasNotToArm</td></tr>
+            <tr><td class="col-name">datePrefUS / timePref12</td><td class="col-desc">date and time display format</td></tr>
+          </table></div>
+        </article></div>
+      </section>
+
+      <section class="store-section" id="guiprefs">
+        <div class="store-head">
+          <h2>Gui Prefs.pkl</h2>
+          <span class="store-kind">pickle</span>
+          <span class="store-path">Gui Prefs.pkl</span>
+        </div>
+        <p class="store-desc">Front-end-only window state — never read by the backend. Mostly last-used view geometry, plus one item of real data: saved custom searches.</p>
+        <div class="cards"><article class="card kv-card">
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>key</th><th>meaning</th></tr>
+            <tr><td class="col-name">prevAppWindowPosition / Size, appWindowMaximized</td><td class="col-desc">main window geometry, restored on next launch</td></tr>
+            <tr><td class="col-name">gridView* (Rows, Cols, Fps, Order, ShowInactive)</td><td class="col-desc">monitor-view grid layout</td></tr>
+            <tr><td class="col-name">*SashPos1</td><td class="col-desc">splitter positions per view</td></tr>
+            <tr><td class="col-name">showBoxesAroundObjects / showRegionZones / showDifferentColorBoxes</td><td class="col-desc">overlay toggles</td></tr>
+            <tr><td class="col-name">customDetectionSearches</td><td class="col-desc">saved searches: <code style="font-family:var(--font-mono)">{name, filters:[{col, op, val, conn}]}</code> — <code style="font-family:var(--font-mono)">col</code> names an objectAttributes column (faceName, age, nudity…)</td></tr>
+          </table></div>
+        </article></div>
+      </section>
+
+      <section class="store-section" id="knownfaces">
+        <div class="store-head">
+          <h2>known_faces.dat</h2>
+          <span class="store-kind">pickle</span>
+          <span class="store-path">known_faces.dat <span style="color:var(--ink-faint)">+ .bak</span></span>
+        </div>
+        <p class="store-desc">The face-recognition cache — two parallel arrays, no image or object reference. This is why deleting one enrolled photo means rebuilding the whole file rather than removing a row.</p>
+        <div class="cards"><article class="card kv-card">
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>key</th><th>type</th><th>meaning</th></tr>
+            <tr><td class="col-name">encodings</td><td class="col-type">list[float32[512]]</td><td class="col-desc">L2-normalized ArcFace embedding, one per enrolled photo</td></tr>
+            <tr><td class="col-name">names</td><td class="col-type">list[str]</td><td class="col-desc">display name for the encoding at the same index — the <em>only</em> link back to objectAttributes.faceName, matched by string, not id</td></tr>
+          </table></div>
+          <div class="kv-note">10 embeddings enrolled as of this snapshot. <code style="font-family:var(--font-mono)">.bak</code> is a one-time copy made just before the first append.</div>
+        </article></div>
+      </section>
+
+      <section class="store-section" id="rules">
+        <div class="store-head">
+          <h2>rules\*.rule &middot; rules\*.query</h2>
+          <span class="store-kind">pickle</span>
+          <span class="store-path">rules\&lt;name&gt;.rule + rules\&lt;name&gt;.query</span>
+        </div>
+        <p class="store-desc">Every saved rule is <strong>two pickle files that share a filename stem</strong>, and the split is the single most surprising thing in this schema: the <em>schedule</em> lives only in the <code style="font-family:var(--font-mono)">.rule</code>, while everything the Search window matches on lives in the <code style="font-family:var(--font-mono)">.query</code>. The stem <em>is</em> the rule name — there is no id — so renaming a rule renames both files. 94 rules on this install.</p>
+        <div class="cards"><article class="card">
+          <div class="card-head">
+            <h3>&lt;name&gt;.rule</h3>
+            <span class="card-purpose">when the rule may fire, and on which camera</span>
+            <span class="card-count">a pickled <span class="n">RealTimeRule</span></span>
+          </div>
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>attribute</th><th>type</th><th>meaning</th></tr>
+            <tr><td class="col-name">_queryName</td><td class="col-type">str</td><td class="col-desc">stem of the paired <code style="font-family:var(--font-mono)">.query</code> — the join between the two halves</td></tr>
+            <tr><td class="col-name">_cameraLocation</td><td class="col-type">str</td><td class="col-desc"><span class="tag">FK</span> camera location — same <code style="font-family:var(--font-mono)">camLoc</code> key used across objdb2, clipdb and camdb</td></tr>
+            <tr><td class="col-name">_isEnabled</td><td class="col-type">bool</td><td class="col-desc">whether the live rule engine runs this rule</td></tr>
+            <tr><td class="col-name">_schedule</td><td class="col-type">dict</td><td class="col-desc">dayType / customDays, is24Hours, start+stop Hour/Min, start+stop Type (<code style="font-family:var(--font-mono)">fixed</code> / <code style="font-family:var(--font-mono)">sunrise</code> / <code style="font-family:var(--font-mono)">sunset</code>), start+stop Offset, latitude, longitude</td></tr>
+          </table></div>
+          <div class="kv-note"><strong>The schedule is here and nowhere else.</strong> It is not on the query model, so any code path that loads a rule by name and gets <code style="font-family:var(--font-mono)">None</code> silently falls back to a default 24/7 schedule — the cause of two separate bugs (duplicate-rule losing its schedule; retrospective Search ignoring it).</div>
+        </article>
+        <article class="card">
+          <div class="card-head">
+            <h3>&lt;name&gt;.query</h3>
+            <span class="card-purpose">what the rule matches, and what it does about it</span>
+            <span class="card-count">a pickled <span class="n">SavedQueryDataModel</span></span>
+          </div>
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>attribute</th><th>type</th><th>meaning</th></tr>
+            <tr><td class="col-name">_name / _visibleName</td><td class="col-type">str</td><td class="col-desc">rule name; normally both equal the filename stem</td></tr>
+            <tr><td class="col-name">_videoSource</td><td class="col-type">obj</td><td class="col-desc">VideoSourceBlockDataModel — holds <code style="font-family:var(--font-mono)">_locationName</code></td></tr>
+            <tr><td class="col-name">_targets</td><td class="col-type">list</td><td class="col-desc">what to look for (person / animal / vehicle / object, faces, nudity)</td></tr>
+            <tr><td class="col-name">_triggers</td><td class="col-type">list</td><td class="col-desc">region / line / door / duration / min-size blocks. <strong>A duration block's <code style="font-family:var(--font-mono)">_moreThanValue</code> is the usual reason two "identical" rules return different result counts</strong> — compare these before anything else.</td></tr>
+            <tr><td class="col-name">_responses</td><td class="col-type">list</td><td class="col-desc">pairs of <code style="font-family:var(--font-mono)">(kind, config-dict)</code> — RecordResponse, SoundResponse, email, FTP, push, webhook, iHost, snapshot, local export</td></tr>
+            <tr><td class="col-name">_lastEdited</td><td class="col-type">tuple</td><td class="col-desc"><span class="tag">DEP</span> UI bookkeeping — which editor block was touched last</td></tr>
+          </table></div>
+          <div class="kv-note"><code style="font-family:var(--font-mono)">SoundResponse.soundPath</code> is an <strong>absolute path into whichever source tree was running when the rule was saved</strong>, so rules survive a tree move with dead paths. Harmless while the response is disabled — it only trips NetworkMessageServer's path validation — but 58 of the 64 sound paths on this install point at trees that no longer exist.</div>
+        </article></div>
+      </section>
+
+      <section class="store-section" id="live">
+        <div class="store-head">
+          <h2>live\</h2>
+          <span class="store-kind">binary rings</span>
+          <span class="store-path">live\&lt;camLoc&gt;.audio &middot; .live &middot; .snaps\</span>
+        </div>
+        <p class="store-desc">Per-camera runtime buffers, not persistent data — written continuously by the camera process and read by the front end. Three per camera (48 entries for this fleet). Safe to delete while the app is stopped; they are recreated on the next camera start.</p>
+        <div class="cards"><article class="card">
+          <div class="card-head">
+            <h3>live\&lt;camLoc&gt;.*</h3>
+            <span class="card-purpose">three runtime buffers per camera</span>
+            <span class="card-count">entries <span class="n">48</span></span>
+          </div>
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>entry</th><th>form</th><th>meaning</th></tr>
+            <tr><td class="col-name">&lt;camLoc&gt;.audio</td><td class="col-type">PCM ring</td><td class="col-desc">s16le live audio, teed off the recorder's ffmpeg so live listening costs the camera no extra RTSP session. Read via <code style="font-family:var(--font-mono)">AudioRingReader</code>.</td></tr>
+            <tr><td class="col-name">&lt;camLoc&gt;.live</td><td class="col-type">mmap</td><td class="col-desc">latest live-view frame. Since single-stream it is resized from the <strong>640-wide analysis frame</strong>, not the raw substream — which is why the enlarged live view is softer than it used to be on cameras with a good substream.</td></tr>
+            <tr><td class="col-name">&lt;camLoc&gt;.snaps\</td><td class="col-type">JPEG dir</td><td class="col-desc">rolling full-resolution stills (~40 s retention) feeding the face/nudity full-res path. Under single-stream written at a fixed <strong>1 fps</strong>; on the two-session path, one per keyframe. <strong>A file's mtime must equal its content's capture moment</strong> — mixing a fixed rate with keyframe-only decoding forges fresh timestamps onto stale pixels, which is exactly how the full-res face path broke once.</td></tr>
+          </table></div>
+        </article></div>
+      </section>
+
+      <section class="store-section" id="imagecheck">
+        <div class="store-head">
+          <h2>imagecheck_config.json</h2>
+          <span class="store-kind">JSON</span>
+          <span class="store-path">imagecheck_config.json</span>
+        </div>
+        <p class="store-desc">Tunable thresholds for the detection pipeline — shared verbatim between the Options UI and the detector, so the two can never disagree about what a setting means.</p>
+        <div class="cards"><article class="card kv-card">
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>key</th><th>default</th><th>meaning</th></tr>
+            <tr><td class="col-name">YOLO_MODEL / YOLO_CONF_THRESHOLD</td><td class="col-type">yolo26n.pt / 0.25</td><td class="col-desc">base object detector and its confidence floor</td></tr>
+            <tr><td class="col-name">PERSON_CONF_FOR_ATTRS</td><td class="col-type">0.50</td><td class="col-desc">person confidence required before face/nudity analysis even runs</td></tr>
+            <tr><td class="col-name">RUN_FACE / FACE_DET_CONF / FACEMATCH_CONF</td><td class="col-type">true / 0.60 / 0.32</td><td class="col-desc">face recognition on/off, detection floor, and match-similarity floor</td></tr>
+            <tr><td class="col-name">MIN_FACE_SIZE / FULLRES_ATTRS</td><td class="col-type">20 / true</td><td class="col-desc">minimum face size to analyze; whether to use the full-resolution snapshot instead of the analysis-stream crop</td></tr>
+            <tr><td class="col-name">FACE_TRACK_UPDATES</td><td class="col-type">true</td><td class="col-desc">keep sampling a person after its type vote, so a face recognized late still updates objectAttributes</td></tr>
+            <tr><td class="col-name">ENROLL_MIN_DET / ENROLL_MIN_FACE_PX</td><td class="col-type">0.65 / 64</td><td class="col-desc">quality floor for the "add face to baseline" harvest — rejects junk crops before they're ever offered</td></tr>
+            <tr><td class="col-name">RUN_NUDITY / NUDE_THRESHOLDS / NUDE_ENABLED</td><td class="col-type">false / — / —</td><td class="col-desc">nudity detection toggle, per-class score floors, and which classes are active</td></tr>
+          </table></div>
+        </article></div>
+      </section>
+
+      <section class="store-section" id="ihost">
+        <div class="store-head">
+          <h2>ihost_config.json</h2>
+          <span class="store-kind">JSON</span>
+          <span class="store-path">ihost_config.json</span>
+        </div>
+        <p class="store-desc">Global connection to an eWeLink CUBE / iHost smart-home hub, plus the device list cached from the last "Refresh devices."</p>
+        <div class="cards"><article class="card kv-card">
+          <div class="ledger-wrap"><table class="ledger">
+            <tr><th>key</th><th>meaning</th></tr>
+            <tr><td class="col-name">ip / token</td><td class="col-desc">hub address and bearer token</td></tr>
+            <tr><td class="col-name">latitude / longitude / nightOffsetMinutes</td><td class="col-desc">location used for the "night only" trigger gate</td></tr>
+            <tr><td class="col-name">devices</td><td class="col-desc">list of <code style="font-family:var(--font-mono)">{name, id}</code> cached from the hub, so rules can pick a device by name</td></tr>
+          </table></div>
+        </article></div>
+      </section>
+
+      <footer class="colophon">
+        Row counts and enrollment totals reflect a single point-in-time read of the live install and will drift.<br>
+        Also present in the data dir but not shown above: <code style="font-family:var(--font-mono)">port</code> / <code style="font-family:var(--font-mono)">detection_service.port</code> (a listening-port number, nothing else — note both are <strong>pickles, not text</strong>, so read them with <code style="font-family:var(--font-mono)">pickle.load(open(p,'rb'))</code>), <code style="font-family:var(--font-mono)">detection_models.json</code> (which model files the detector loaded), <code style="font-family:var(--font-mono)">shlaunch.state</code> (back-end service launcher state), <code style="font-family:var(--font-mono)">backup\</code> (dated <code style="font-family:var(--font-mono)">camdb</code> snapshots), <code style="font-family:var(--font-mono)">Baseline\</code> (enrollment source images), <code style="font-family:var(--font-mono)">TtsCache\</code> / <code style="font-family:var(--font-mono)">TtsModels\</code>, <code style="font-family:var(--font-mono)">remote\</code>, <code style="font-family:var(--font-mono)">web\</code>, <code style="font-family:var(--font-mono)">logs\</code> (per-service, plus <code style="font-family:var(--font-mono)">logs\cameras\&lt;cam&gt;.log</code>), and <code style="font-family:var(--font-mono)">be_trace.txt</code> / <code style="font-family:var(--font-mono)">ts_trace.txt</code> (plain execution traces, not structured data).
+      </footer>
+
+    </div>
+  </div>
+</div>

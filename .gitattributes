@@ -1,0 +1,57 @@
+# Automatically recognize text files
+* text=auto
+# Source code - always use LF
+*.py    text eol=lf
+*.pyw   text eol=lf
+*.c     text eol=lf
+*.cpp   text eol=lf
+*.h     text eol=lf
+*.hpp   text eol=lf
+# Web files
+*.html  text eol=lf
+*.htm   text eol=lf
+*.css   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.xml   text eol=lf
+# Scripts
+*.sh    text eol=lf
+# Configuration/documentation
+*.md    text eol=lf
+*.txt   text eol=lf
+*.ini   text eol=lf
+*.cfg   text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.plist text eol=lf
+# Makefiles
+Makefile text eol=lf
+# Windows command scripts - keep native Windows line endings
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+# PowerShell is fine with LF
+*.ps1   text eol=lf
+# Binary files - NEVER line-ending convert
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bmp   binary
+*.ico   binary
+*.icns  binary
+*.wav   binary
+*.mp3   binary
+*.otf   binary
+*.ttf   binary
+*.woff  binary
+*.eot   binary
+*.dll   binary
+*.exe   binary
+*.pyd   binary
+*.swf   binary
+*.zip   binary
+*.tgz   binary
+*.gz    binary
+*.7z    binary
+*.onnx  binary
+*.pt    binary

@@ -1,0 +1,149 @@
+# ============================================================
+# SH_ImageCheck - Git Ignore
+# ============================================================
+
+# ------------------------------------------------------------
+# Python virtual environments
+# ------------------------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+
+# ------------------------------------------------------------
+# Python generated files / caches
+# ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ------------------------------------------------------------
+# IDE / local development settings
+# ------------------------------------------------------------
+.idea/
+.vscode/
+
+# Claude local machine settings
+# Keep .claude/agents if desired, but not local settings
+.claude/settings.local.json
+
+# ------------------------------------------------------------
+# Environment variables / credentials / secrets
+# ------------------------------------------------------------
+.env
+.env.*
+*.env
+credentials.json
+secrets.json
+config_private.json
+*.pem
+*.key
+# Public CA bundle the app loads (not a secret)
+!config/cacert.pem
+
+# ------------------------------------------------------------
+# AI models
+#
+# Your repository currently contains InsightFace, NudeNet and
+# YOLO model files. These can be hundreds of MB and should not
+# normally be stored directly in Git.
+# ------------------------------------------------------------
+models/
+
+*.onnx
+*.pt
+*.pth
+*.engine
+*.weights
+*.tflite
+
+# ------------------------------------------------------------
+# Build output
+#
+# IMPORTANT:
+# Do NOT ignore the entire Build directory because it contains
+# useful source files such as Build.bat, build_installer.ps1,
+# launcher.py, .iss files, documentation, etc.
+# ------------------------------------------------------------
+Build/exe.win-amd64-*/
+Build/stage/
+Build/out/
+Build/*.egg-info/
+Build/__pycache__/
+
+# Downloaded installers used during builds
+Build/*.exe
+Build/*.msi
+
+# General Python packaging
+# (no generic "build/" rule: on Windows it would also hide Build/)
+dist/
+*.egg-info/
+
+# ------------------------------------------------------------
+# Temporary / backup files
+# ------------------------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.containbak
+~*
+
+# ------------------------------------------------------------
+# Logs
+# ------------------------------------------------------------
+*.log
+logs/
+
+# ------------------------------------------------------------
+# Local databases
+# ------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+
+# ------------------------------------------------------------
+# Generated project inventory files
+# These were created only to inspect the repository
+# ------------------------------------------------------------
+projectfiles.txt
+project_tree.txt
+
+# ------------------------------------------------------------
+# OS generated files
+# ------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+$RECYCLE.BIN/
+
+# ------------------------------------------------------------
+# Archives normally generated/downloaded locally
+# ------------------------------------------------------------
+*.zip
+*.7z
+*.rar
+
+# ------------------------------------------------------------
+# Manual dated backups (git history replaces these)
+# ------------------------------------------------------------
+*.bak-*
+*.containbak
+*.wallspanbak
+*.newest
+
+# ------------------------------------------------------------
+# Legacy Sighthound library bundles (too large for GitHub;
+# not referenced by any code or script)
+# ------------------------------------------------------------
+win/*.tgz
+mac/*.tgz
