@@ -446,13 +446,14 @@ def analyzeStill(path, client, cfg, logger=None):
     @param  cfg     The ImageCheckConfig dict.
     @param  logger  Optional logger.
     @return dict    kind/width/height/captureMs/modelSig/error/detections,
-                    plus faceModelRan/nudityModelRan.
+                    plus faceModelRan/nudityModelRan and exifDate/exifTime.
     """
     result = {"kind": "image", "width": None, "height": None,
               "durationMs": None, "captureMs": None,
               "modelSig": modelSignature(cfg), "error": None,
               "detections": [], "elapsedMs": 0,
-              "faceModelRan": False, "nudityModelRan": False}
+              "faceModelRan": False, "nudityModelRan": False,
+              "exifDate": None, "exifTime": None}
 
     started = time.time()
     try:
@@ -464,7 +465,9 @@ def analyzeStill(path, client, cfg, logger=None):
         return result
 
     result["height"], result["width"] = frame.shape[:2]
-    result["captureMs"] = _captureTimeMs(path)
+    taken = exifDateTaken(path)
+    result["captureMs"] = _captureTimeMs(path, taken)
+    result.update(exifDateTimeFields(taken))
 
     try:
         running = optionalModelsRunning(client, cfg)
@@ -505,7 +508,8 @@ def analyzeVideo(path, client, cfg, sampleSecs=kDefaultSampleSecs,
               "modelSig": modelSignature(cfg), "error": None,
               "detections": [], "elapsedMs": 0, "sampled": 0,
               "truncated": False,
-              "faceModelRan": False, "nudityModelRan": False}
+              "faceModelRan": False, "nudityModelRan": False,
+              "exifDate": None, "exifTime": None}
 
     started = time.time()
     try:
@@ -592,11 +596,63 @@ def analyzeFile(path, client, cfg, logger=None, **kwargs):
     return {"kind": None, "width": None, "height": None, "durationMs": None,
             "captureMs": None, "modelSig": modelSignature(cfg),
             "error": "Not a file type we can read.", "detections": [],
-            "elapsedMs": 0, "faceModelRan": False, "nudityModelRan": False}
+            "elapsedMs": 0, "faceModelRan": False, "nudityModelRan": False,
+            "exifDate": None, "exifTime": None}
 
 
 ##############################################################################
-def _captureTimeMs(path):
+def exifDateTaken(path):
+    """The EXIF "date taken" of a photo, as the camera's local wall clock.
+
+    DateTimeOriginal, then DateTimeDigitized, then IFD0 DateTime.
+
+    @param  path  Absolute path.
+    @return       time.struct_time, or None for a video, a file without EXIF,
+                  or a malformed date.
+    """
+    if not isImage(path):
+        return None
+    try:
+        from PIL import Image
+        with Image.open(path) as img:
+            exif = img.getexif()
+            # DateTimeOriginal lives in the Exif sub-IFD (0x8769), not
+            # IFD0 -- the same trap documented in DataManager's snapshot
+            # writer, where putting it at the top level left it
+            # unreadable to Windows and ExifTool alike.
+            sub = exif.get_ifd(0x8769) if exif else None
+            raw = None
+            if sub:
+                raw = sub.get(36867) or sub.get(36868)
+            if not raw and exif:
+                raw = exif.get(306)
+            if raw:
+                return time.strptime(str(raw).strip().rstrip('\x00'),
+                                     "%Y:%m:%d %H:%M:%S")
+    except Exception:
+        # No EXIF, unreadable EXIF, or a camera that writes a malformed date.
+        pass
+    return None
+
+
+##############################################################################
+def exifDateTimeFields(taken):
+    """Split a date taken into the stored, searchable date and time fields.
+
+    Integers so the advanced search can compare them: 20260115 and 193005
+    for 2026-01-15 19:30:05.
+
+    @param  taken  time.struct_time from exifDateTaken, or None.
+    @return dict   {"exifDate": int or None, "exifTime": int or None}
+    """
+    if taken is None:
+        return {"exifDate": None, "exifTime": None}
+    return {"exifDate": int(time.strftime("%Y%m%d", taken)),
+            "exifTime": int(time.strftime("%H%M%S", taken))}
+
+
+##############################################################################
+def _captureTimeMs(path, taken=None):
     """When the file was captured, in epoch milliseconds.
 
     EXIF DateTimeOriginal when there is one, file mtime otherwise.  A photo
@@ -604,33 +660,17 @@ def _captureTimeMs(path):
     the file was last written -- a copy or an edit moves mtime and leaves the
     capture time alone.
 
-    @param  path  Absolute path.
-    @return int   Epoch milliseconds, or None.
+    @param  path   Absolute path.
+    @param  taken  exifDateTaken(path), when the caller already has it.
+    @return int    Epoch milliseconds, or None.
     """
-    if isImage(path):
+    if taken is None:
+        taken = exifDateTaken(path)
+    if taken is not None:
         try:
-            from PIL import Image
-            with Image.open(path) as img:
-                exif = img.getexif()
-                # DateTimeOriginal lives in the Exif sub-IFD (0x8769), not
-                # IFD0 -- the same trap documented in DataManager's snapshot
-                # writer, where putting it at the top level left it
-                # unreadable to Windows and ExifTool alike.
-                sub = exif.get_ifd(0x8769) if exif else None
-                raw = None
-                if sub:
-                    raw = sub.get(36867) or sub.get(36868)
-                if not raw and exif:
-                    raw = exif.get(306)
-                if raw:
-                    parsed = time.strptime(str(raw).strip(),
-                                           "%Y:%m:%d %H:%M:%S")
-                    return int(time.mktime(parsed) * 1000)
-        except Exception:
-            # No EXIF, unreadable EXIF, or a camera that writes a malformed
-            # date.  mtime below is the answer in all three cases.
+            return int(time.mktime(taken) * 1000)
+        except (OverflowError, ValueError):
             pass
-
     try:
         return int(os.path.getmtime(path) * 1000)
     except OSError:

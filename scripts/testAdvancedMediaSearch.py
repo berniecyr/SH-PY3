@@ -40,6 +40,30 @@ class AdvancedSearchTests(unittest.TestCase):
         self.assertEqual(buildQuery(state('files.durationMs', 'Between', '1000', end='5000')),
                          'files.durationMs:between:"1000,5000"')
 
+    def test_exif_night_window_across_midnight(self):
+        config = dict(base='', join='All', rules=[
+            dict(field='files.exifDate', op='Between dates', value='2026-01-01', end='2026-02-28'),
+            dict(field='files.exifTime', op='Between times', value='19:00', end='06:00')])
+        query = buildQuery(config)
+        self.assertEqual(query, 'files.exifDate:between:"20260101,20260228" AND '
+                                '(files.exifTime:ge:"190000" OR files.exifTime:le:"60059")')
+        rows = [('night.jpg', 20260115, 213000), ('early.jpg', 20260210, 52000),
+                ('day.jpg', 20260115, 120000), ('march.jpg', 20260305, 220000),
+                ('none.jpg', None, None)]
+        for name, day, clock in rows:
+            self.db._conn.execute('INSERT INTO files(path, exifDate, exifTime) VALUES (?,?,?)',
+                                  (str(self.root / name), day, clock))
+        self.db._conn.execute('INSERT INTO file_locations(path, fileUid) SELECT path, uid FROM files')
+        found = {Path(p).name for p in self.db.pathsMatching(None, query=query, allFolders=True)}
+        self.assertEqual(found, {'night.jpg', 'early.jpg'})
+        self.assertEqual(buildQuery(state('files.exifTime', 'Between times', '08:00', end='17:30')),
+                         'files.exifTime:between:"80000,173059"')
+        self.assertEqual(buildQuery(state('files.exifDate', 'On date', '2026-01-15')),
+                         'files.exifDate:between:"20260115,20260115"')
+        for bad in ('25:00', '7pm', '12:60'):
+            with self.assertRaises(ValueError):
+                buildQuery(state('files.exifTime', 'At or after time', bad))
+
     def test_boolean_mixed_base_and_exclusions(self):
         config = state('all', 'Whole word', 'door')
         config.update(base='person:Bernie', join='Any')

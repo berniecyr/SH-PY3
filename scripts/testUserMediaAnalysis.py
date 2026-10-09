@@ -410,6 +410,32 @@ def testCaptureTime():
     check("falls back to mtime with no EXIF",
           abs(ms2 - os.path.getmtime(plain) * 1000) < 2000)
 
+    fields = UMA.exifDateTimeFields(UMA.exifDateTaken(tmp))
+    check("EXIF date taken split into date and time",
+          fields == {"exifDate": 20190704, "exifTime": 112233}, str(fields))
+    check("no EXIF date leaves both fields empty",
+          UMA.exifDateTimeFields(UMA.exifDateTaken(plain))
+          == {"exifDate": None, "exifTime": None})
+
+    # Backfill reads EXIF for records analysed before the fields existed.
+    dbPath = os.path.join(tempfile.gettempdir(), "test_exif_backfill.db")
+    for suffix in ("", "-wal", "-shm"):
+        if os.path.exists(dbPath + suffix):
+            os.remove(dbPath + suffix)
+    db = UserMediaDb.UserMediaDb().open(dbPath)
+    for path in (tmp, plain):
+        db._conn.execute("INSERT INTO files (path, analyzedMs) VALUES (?, 1)",
+                         (path,))
+    checked, filled = db.backfillExifDates()
+    row = db._conn.execute("SELECT exifDate, exifTime FROM files "
+                           "WHERE path=?", (tmp,)).fetchone()
+    check("backfill fills only files with an EXIF date",
+          (checked, filled, tuple(row)) == (2, 1, (20190704, 112233)))
+    db.close()
+    for suffix in ("", "-wal", "-shm"):
+        if os.path.exists(dbPath + suffix):
+            os.remove(dbPath + suffix)
+
     os.remove(tmp); os.remove(plain)
 
 

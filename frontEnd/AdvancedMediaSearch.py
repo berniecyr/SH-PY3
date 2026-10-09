@@ -9,6 +9,10 @@ TEXT_OPS = ['Contains', 'Whole word', 'Exactly equals', 'Is blank', 'Is not blan
 NUMBER_OPS = ['Equals number', 'At least', 'At most', 'Greater than', 'Less than', 'Between']
 DATE_OPS = ['On date', 'On or after', 'On or before', 'After', 'Before', 'Between dates']
 DATE_UNITS = {'mtime': 1, 'mtimeNs': 1000000000, 'captureMs': 1000, 'analyzedMs': 1000}
+# Stored as YYYYMMDD / HHMMSS integers (EXIF date taken); see UserMediaDb.
+DAY_FIELDS = {'exifDate'}
+TIME_FIELDS = {'exifTime'}
+TIME_OPS = ['At time', 'At or after time', 'At or before time', 'Between times']
 MODES = {'Contains': '', 'Whole word': 'word', 'Exactly equals': 'exact',
          'Has exact tag': 'tag', 'Equals number': 'eq', 'At least': 'ge',
          'At most': 'le', 'Greater than': 'gt', 'Less than': 'lt', 'Between': 'between'}
@@ -22,6 +26,13 @@ def quote(value):
 
 
 def dateValue(value, field, end=False):
+    if field.split('.')[-1] in DAY_FIELDS:
+        try:
+            if len(value) != 10:
+                raise ValueError()
+            return datetime.strptime(value, '%Y-%m-%d').strftime('%Y%m%d')
+        except ValueError:
+            raise ValueError('Enter a date as YYYY-MM-DD.')
     unit = DATE_UNITS.get(field.split('.')[-1])
     if not unit:
         return value
@@ -38,6 +49,36 @@ def dateValue(value, field, end=False):
         raise ValueError('Enter a date as YYYY-MM-DD or a date/time as YYYY-MM-DD HH:MM:SS.')
 
 
+def timeValue(value, end=False):
+    """HH:MM or HH:MM:SS as an HHMMSS integer; a minute-only end takes the whole minute."""
+    try:
+        parts = [int(p) for p in value.strip().split(':')]
+        if len(parts) not in (2, 3) or not (0 <= parts[0] < 24 and 0 <= parts[1] < 60):
+            raise ValueError()
+        seconds = parts[2] if len(parts) == 3 else (59 if end else 0)
+        if not 0 <= seconds < 60:
+            raise ValueError()
+        return parts[0] * 10000 + parts[1] * 100 + seconds
+    except ValueError:
+        raise ValueError('Enter a time as HH:MM or HH:MM:SS (24-hour).')
+
+
+def timeTerm(field, op, value, end):
+    """A time-of-day condition; a range whose start is after its end spans midnight."""
+    if op == 'At or after time':
+        return '%s:ge:"%d"' % (field, timeValue(value))
+    if op == 'At or before time':
+        return '%s:le:"%d"' % (field, timeValue(value, end=True))
+    if op == 'At time':
+        end = value
+    if not end:
+        raise ValueError('Enter a value for each condition, or remove the empty condition.')
+    start, stop = timeValue(value), timeValue(end, end=True)
+    if start <= stop:
+        return '%s:between:"%d,%d"' % (field, start, stop)
+    return '(%s:ge:"%d" OR %s:le:"%d")' % (field, start, field, stop)
+
+
 def buildQuery(state):
     terms = []
     for rule in state.get('rules', []):
@@ -50,6 +91,10 @@ def buildQuery(state):
         else:
             if not value:
                 raise ValueError('Enter a value for each condition, or remove the empty condition.')
+            if op in TIME_OPS:
+                term = timeTerm(field, op, value, rule.get('end', ''))
+                terms.append(('NOT (' + term + ')') if rule.get('exclude') else term)
+                continue
             mode = MODES[op]
             if op in NUMBER_OPS + DATE_OPS:
                 value = dateValue(value, field, end=op in ('At most', 'Greater than', 'On or before', 'After'))
@@ -122,6 +167,7 @@ class AdvancedMediaSearchDialog(wx.Dialog):
         self.rows.SetupScrolling(scroll_x=False)
         root.Add(self.rows, 1, wx.EXPAND | wx.ALL, 10)
         note = wx.StaticText(self, label='Dates: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS (local time); date-only range ends include the full day.\n'
+            'exifDate and exifTime are a photo\'s EXIF date taken. Times are HH:MM (24-hour); 19:00 to 06:00 spans midnight.\n'
             'Size is bytes; durationMs and atMs are milliseconds; confidence is 0–1.\n'
             'All fields includes all three database tables. Separate conditions may match different detection rows.\n'
             'Between applies both bounds to the same value. New search uses folder scope and Show only filters.\n'
@@ -192,12 +238,17 @@ class AdvancedMediaSearchDialog(wx.Dialog):
             key = self._fields[field.GetSelection()]
             choices = list(TEXT_OPS)
             if key == 'all': choices = choices[:3]
+            name = key.split('.')[-1]
             if self._types.get(key) in ('INTEGER', 'REAL', 'NUMERIC'):
-                choices += DATE_OPS if key.split('.')[-1] in DATE_UNITS else NUMBER_OPS
+                if name in TIME_FIELDS:
+                    choices += TIME_OPS
+                else:
+                    choices += DATE_OPS if name in DATE_UNITS or name in DAY_FIELDS else NUMBER_OPS
             if key == 'files.description_tags': choices.append('Has exact tag')
             old = op.GetStringSelection(); op.Set(choices)
             op.SetStringSelection(old if old in choices else choices[0])
-            value.SetHint('YYYY-MM-DD' if key.split('.')[-1] in DATE_UNITS else 'Value')
+            value.SetHint('YYYY-MM-DD' if name in DATE_UNITS or name in DAY_FIELDS
+                          else 'HH:MM' if name in TIME_FIELDS else 'Value')
             end.SetHint('Range end')
             self._refresh()
         field.Bind(wx.EVT_CHOICE, configure)
@@ -223,7 +274,7 @@ class AdvancedMediaSearchDialog(wx.Dialog):
     def _refresh(self, event=None):
         for _, _, op, value, end, _ in self._rows:
             value.Enable(op.GetStringSelection() not in ('Is blank', 'Is not blank'))
-            end.Show(op.GetStringSelection() in ('Between', 'Between dates'))
+            end.Show(op.GetStringSelection() in ('Between', 'Between dates', 'Between times'))
         self.rows.Layout(); self.rows.FitInside()
         try:
             query = buildQuery(self.getState()); self._validate(query)

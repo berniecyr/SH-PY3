@@ -125,11 +125,16 @@ _kFileColumns = [
     ("thumbPath", "TEXT"), ("error", "TEXT"),
     ("description_tags", "TEXT"), ("description_ai", "TEXT"),
     ("faceModelRan", "INTEGER"), ("nudityModelRan", "INTEGER"),
+    ("exifDate", "INTEGER"), ("exifTime", "INTEGER"),
 ]
 
 # Optional-model flags: 1 when that model ran during the file's analysis, 0
 # when it was skipped because it was off or not loaded, NULL if never analysed.
 _kModelRanColumns = ("faceModelRan", "nudityModelRan")
+
+# EXIF "date taken", split so either half can be searched alone: exifDate is
+# YYYYMMDD (20260115) and exifTime is HHMMSS (193005), the camera's local
+# clock.  NULL when the file has no EXIF date.  See backfillExifDates.
 
 _kDetectionColumns = [
     ("fileUid", "INTEGER"), ("atMs", "INTEGER"),
@@ -229,7 +234,8 @@ class UserMediaDb(object):
                 analyzedMs INTEGER, analyzerVersion INTEGER, modelSig TEXT,
                 thumbPath TEXT, error TEXT,
                 description_tags TEXT, description_ai TEXT,
-                faceModelRan INTEGER, nudityModelRan INTEGER)""")
+                faceModelRan INTEGER, nudityModelRan INTEGER,
+                exifDate INTEGER, exifTime INTEGER)""")
         c.execute("""
             CREATE TABLE IF NOT EXISTS detections (
                 uid INTEGER PRIMARY KEY,
@@ -403,7 +409,7 @@ class UserMediaDb(object):
             c.execute('UPDATE detections SET fileUid=? WHERE fileUid=?', (target, source))
             columns = ('kind', 'width', 'height', 'durationMs', 'captureMs',
                        'analyzedMs', 'analyzerVersion', 'modelSig', 'error',
-                       'faceModelRan', 'nudityModelRan')
+                       'faceModelRan', 'nudityModelRan', 'exifDate', 'exifTime')
             c.execute('UPDATE files SET '+','.join(name+'=?' for name in columns)+' WHERE uid=?',
                       tuple(b[name] for name in columns)+(target,))
         c.execute('DELETE FROM detections WHERE fileUid=?', (source,))
@@ -456,7 +462,8 @@ class UserMediaDb(object):
                 else:
                     c.execute('DELETE FROM detections WHERE fileUid=?', (current['uid'],))
                     c.execute('UPDATE files SET contentHash=?, analyzedMs=NULL, '
-                              'faceModelRan=NULL, nudityModelRan=NULL WHERE uid=?',
+                              'faceModelRan=NULL, nudityModelRan=NULL, '
+                              'exifDate=NULL, exifTime=NULL WHERE uid=?',
                               (digest, current['uid']))
             candidates = c.execute('SELECT uid FROM files WHERE contentHash=? ORDER BY uid', (digest,)).fetchall()
             if current and current['contentHash'] is None:
@@ -550,7 +557,7 @@ class UserMediaDb(object):
         @param  path    Absolute path of the file.
         @param  result  Dict from UserMediaAnalysis: kind, width, height,
                         durationMs, captureMs, modelSig, error, detections,
-                        faceModelRan, nudityModelRan.
+                        faceModelRan, nudityModelRan, exifDate, exifTime.
         @return uid     The file's row id.
         """
         try:
@@ -570,8 +577,9 @@ class UserMediaDb(object):
             INSERT INTO files (path, size, mtime, kind, width, height,
                                durationMs, captureMs, analyzedMs,
                                analyzerVersion, modelSig, error,
-                               faceModelRan, nudityModelRan)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                               faceModelRan, nudityModelRan,
+                               exifDate, exifTime)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(path) DO UPDATE SET
                 size=excluded.size, mtime=excluded.mtime,
                 kind=excluded.kind, width=excluded.width,
@@ -581,13 +589,15 @@ class UserMediaDb(object):
                 analyzerVersion=excluded.analyzerVersion,
                 modelSig=excluded.modelSig, error=excluded.error,
                 faceModelRan=excluded.faceModelRan,
-                nudityModelRan=excluded.nudityModelRan""",
+                nudityModelRan=excluded.nudityModelRan,
+                exifDate=excluded.exifDate, exifTime=excluded.exifTime""",
             (canonical, size, mtime, result.get("kind"), result.get("width"),
              result.get("height"), result.get("durationMs"),
              result.get("captureMs"), int(time.time() * 1000),
              kAnalyzerVersion, result.get("modelSig"), result.get("error"),
              1 if result.get("faceModelRan") else 0,
-             1 if result.get("nudityModelRan") else 0))
+             1 if result.get("nudityModelRan") else 0,
+             result.get("exifDate"), result.get("exifTime")))
 
         row = c.execute("SELECT uid FROM files WHERE path = ?",
                         (canonical,)).fetchone()
@@ -613,6 +623,43 @@ class UserMediaDb(object):
                  1 if det.get("nudity") else 0, det.get("nudityDetail")))
         c.commit()
         return uid
+
+
+    ###########################################################
+    def backfillExifDates(self, progressFn=None):
+        """Fill exifDate/exifTime from each file's EXIF where still empty.
+
+        Reads every copy of a record until one has an EXIF date, so a record
+        whose first path has moved is still filled from another.  Safe to run
+        again: records already filled, or without EXIF, are left as they are.
+
+        @param  progressFn  Optional f(done, total).
+        @return (checked, filled)
+        """
+        from backEnd.UserMediaAnalysis import exifDateTaken, exifDateTimeFields
+        c = self._conn
+        uids = [r['uid'] for r in c.execute(
+            'SELECT uid FROM files WHERE exifDate IS NULL ORDER BY uid')]
+        filled = 0
+        for done, uid in enumerate(uids, 1):
+            paths = [r['path'] for r in c.execute(
+                'SELECT path FROM files WHERE uid=? UNION '
+                'SELECT path FROM file_locations WHERE fileUid=?', (uid, uid))]
+            for path in paths:
+                fields = exifDateTimeFields(exifDateTaken(path))
+                if fields['exifDate'] is not None:
+                    c.execute('UPDATE files SET exifDate=?, exifTime=? '
+                              'WHERE uid=?',
+                              (fields['exifDate'], fields['exifTime'], uid))
+                    filled += 1
+                    break
+            # Short write transactions, so the app is never locked out long.
+            if done % 200 == 0:
+                c.commit()
+            if progressFn is not None:
+                progressFn(done, len(uids))
+        c.commit()
+        return len(uids), filled
 
 
     ###########################################################
