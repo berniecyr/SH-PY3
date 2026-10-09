@@ -98,17 +98,17 @@ kXNATMarkerArg = "--sh-1194711f"
 
 
 # The app version...
-#kVersionString = "26.10.01"
-kVersionString = "2026.10.01"
+#kVersionString = "26.10.09"
+kVersionString = "2026.10.09"
 # Gets appended to UI representation of version ... change from beta to release as needed
 kVersionStringModifier = ""
 #kMajorVersionString = "26.10"
 kMajorVersionString = "2026.10"
 
 # Date when the release of the current major version happened.
-kMajorVersionFirstReleaseDate = "10/01/2026"
+kMajorVersionFirstReleaseDate = "10/09/2026"
 # kMajorVersionFirstReleaseDate may be backdated -- keep the actual release date we show
-kMajorVersionFirstReleaseDateDisplay = "10/01/2026"
+kMajorVersionFirstReleaseDateDisplay = "10/09/2026"
 
 # The API version...
 kApiVersion = "1.1"

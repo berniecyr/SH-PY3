@@ -66,12 +66,21 @@ from .BaseTrigger import BaseTrigger
 # the detector, which is where the tolerance belongs.  See SavedQueryDataModel.
 kDurationGapToleranceMs = 2000
 
+# Object types that earn the tolerance on rules whose target is "anything".
+# Foliage and other unclassified motion is stored as 'object' and keeps the
+# strict legacy count.  Measured 2026-10-04 on 040_Gate 07:10:05: a 3.4 s
+# person track sat inside "Any object inside my region in 040_Gate" (2 s, the
+# camera's only recording rule) the whole time, but four skipped frames left a
+# longest unbroken run of 0.93 s, so the clip was never saved.
+kDurationGapToleranceTypes = frozenset(('person', 'vehicle', 'animal'))
+
 
 ###############################################################
 class DurationTrigger(BaseTrigger):
     """A trigger that fires when another trigger remains active over time"""
     ###########################################################
-    def __init__(self, childTrigger, msecs, moreThan=True, maxGapMs=0):
+    def __init__(self, childTrigger, msecs, moreThan=True, maxGapMs=0,
+                 gapTypes=None, dataMgr=None):
         """Initializer for the DurationTrigger class
 
         @param  childTrigger  The trigger to monitor
@@ -83,6 +92,11 @@ class DurationTrigger(BaseTrigger):
                               duration restarts (see kDurationGapToleranceMs).
                               0 = legacy: restart on any skipped frame, and
                               forget objects absent from a real-time window.
+        @param  gapTypes      If given, only objects whose type is in this set
+                              get maxGapMs; all others use the legacy count.
+                              None = every object gets maxGapMs.
+        @param  dataMgr       Used to look up object types; required when
+                              gapTypes is given.
         """
         BaseTrigger.__init__(self)
 
@@ -90,6 +104,10 @@ class DurationTrigger(BaseTrigger):
         self._msecs = msecs
         self._moreThan = moreThan
         self._maxGapMs = max(0, int(maxGapMs or 0))
+        self._gapTypes = frozenset(gapTypes) if gapTypes is not None else None
+        self._dataMgr = dataMgr
+        assert self._gapTypes is None or dataMgr is not None, \
+               "gapTypes needs a data manager to look up object types"
 
         self._playOffset = 0
         if self._moreThan:
@@ -260,15 +278,19 @@ class DurationTrigger(BaseTrigger):
         prevActive = set(self._activeObjects.keys())
         curActive = set()
 
+        gapFor = self._getGapsForObjects(
+            prevActive.union(result[0] for result in triggerResults))
+
         for result in triggerResults:
             # Add this objId to the currently active list
             curActive.add(result[0])
 
             if result[0] in self._activeObjects:
                 firstTime, lastFrame, lastTime = self._activeObjects[result[0]]
-                if self._maxGapMs:
+                maxGapMs = gapFor[result[0]]
+                if maxGapMs:
                     # Restart only after more than a tracker dropout.
-                    if result[2] - lastTime > self._maxGapMs:
+                    if result[2] - lastTime > maxGapMs:
                         firstTime = result[2]
                 elif lastFrame < result[1]-1:
                     # Ensure we don't count skipped frames
@@ -296,23 +318,42 @@ class DurationTrigger(BaseTrigger):
 
         # Remove objects no longer triggering from our active list
         if not isFinalize:
-            if not self._maxGapMs:
-                expired = prevActive.difference(curActive)
-            elif triggerResults:
-                # Only once gone for longer than maxGapMs: a real-time window
-                # can be shorter than a tracker dropout.  An empty batch carries
-                # no clock, so nothing expires on it; the gap test above still
-                # restarts an object that comes back late.
-                newest = triggerResults[-1][2]
-                expired = [objId for objId, (_, _, lastTime) in
-                           self._activeObjects.items()
-                           if newest - lastTime > self._maxGapMs]
-            else:
-                expired = ()
+            # Legacy objects are forgotten as soon as a window misses them.
+            # Tolerant ones only once gone for longer than their gap: a
+            # real-time window can be shorter than a tracker dropout.  An empty
+            # batch carries no clock, so they don't expire on it; the gap test
+            # above still restarts an object that comes back late.
+            newest = triggerResults[-1][2] if triggerResults else None
+            expired = []
+            for objId, (_, _, lastTime) in self._activeObjects.items():
+                maxGapMs = gapFor.get(objId, 0)
+                if not maxGapMs:
+                    if objId not in curActive:
+                        expired.append(objId)
+                elif newest is not None and newest - lastTime > maxGapMs:
+                    expired.append(objId)
             for objId in expired:
                 del self._activeObjects[objId]
 
         return triggered
+
+
+    ###########################################################
+    def _getGapsForObjects(self, objIds):
+        """Work out how long each object may go missing (see maxGapMs).
+
+        @param  objIds  The object ids of interest.
+        @return gapFor  A dict mapping each objId to its gap tolerance in ms.
+        """
+        if not self._maxGapMs or self._gapTypes is None:
+            return dict.fromkeys(objIds, self._maxGapMs)
+
+        # Types are settled before an object's frames reach the database (the
+        # type vote decides first), so looking them up here is safe.
+        types = self._dataMgr.getObjectTypes(list(objIds))
+        return {objId: self._maxGapMs if types.get(objId) in self._gapTypes
+                       else 0
+                for objId in objIds}
 
 
     ###########################################################
@@ -321,6 +362,8 @@ class DurationTrigger(BaseTrigger):
 
         @param  dataManager  The new data manager
         """
+        if self._dataMgr is not None:
+            self._dataMgr = dataManager
         self._childTrigger.setDataManager(dataManager)
 
 

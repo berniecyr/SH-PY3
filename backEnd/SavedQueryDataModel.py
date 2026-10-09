@@ -67,7 +67,8 @@ from appCommon.InstallPaths import resolveSoundPath
 
 from .triggers.BinaryTrigger import BinaryTrigger
 from .triggers.DoorTrigger import DoorTrigger
-from .triggers.DurationTrigger import DurationTrigger, kDurationGapToleranceMs
+from .triggers.DurationTrigger import DurationTrigger, \
+    kDurationGapToleranceMs, kDurationGapToleranceTypes
 from .triggers.LineTrigger import LineTrigger
 from .triggers.MinSizeTrigger import MinSizeTrigger
 from .triggers.MinTravelTrigger import MinTravelTrigger
@@ -351,7 +352,15 @@ class SavedQueryDataModel(AbstractModel):
                     config['isEnabled'] = False
 
             elif name == kLocalExportResponse:
+                # A missing folder is created rather than reported, even on a
+                # dry run; the export itself does the same (ResponseRunner's
+                # local copy sender).  Only a folder we can't create is invalid.
                 exportPath = config.get('exportPath', '')
+                if exportPath and not os.path.isdir(exportPath):
+                    try:
+                        os.makedirs(exportPath, exist_ok=True)
+                    except OSError:
+                        pass
                 if exportPath and not os.path.isdir(exportPath):
                     if dryrun:
                         return False
@@ -550,24 +559,30 @@ class SavedQueryDataModel(AbstractModel):
                                          'center', 'inside')
 
         # Create the duration trigger(s).  Rules on a detected class ride out
-        # tracker dropouts; "anything" rules keep the strict legacy count, which
-        # is what holds back flickering foliage.  See kDurationGapToleranceMs.
+        # tracker dropouts.  "anything" rules do too, but only for objects the
+        # detector classified; unclassified motion keeps the strict legacy
+        # count, which is what holds back flickering foliage.  See
+        # kDurationGapToleranceMs and kDurationGapToleranceTypes.
         targets = self.getTargets()
         targetName = targets[0].getTargetName() if targets else 'anything'
-        gapMs = kDurationGapToleranceMs if targetName != 'anything' else 0
+        gapTypes = None
+        if targetName == 'anything':
+            gapTypes = kDurationGapToleranceTypes
 
         if durationModel.getWantMoreThan():
             msecs = self._unitsValuesToMsecs(durationModel.getMoreThanUnits(),
                                              durationModel.getMoreThanValue())
             if msecs > 0:
                 moreThanTrigger = DurationTrigger(whereTrigger, msecs, True,
-                                                  gapMs)
+                                                  kDurationGapToleranceMs,
+                                                  gapTypes, dataManager)
 
         if durationModel.getWantLessThan():
             msecs = self._unitsValuesToMsecs(durationModel.getLessThanUnits(),
                                              durationModel.getLessThanValue())
             lessThanTrigger = DurationTrigger(whereTrigger, msecs, False,
-                                              gapMs)
+                                              kDurationGapToleranceMs,
+                                              gapTypes, dataManager)
 
         # Prepare the trigger to be fed into the target trigger
         if moreThanTrigger and lessThanTrigger:
