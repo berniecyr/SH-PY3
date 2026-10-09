@@ -94,6 +94,21 @@ class AdvancedSearchTests(unittest.TestCase):
             with self.assertRaises(ValueError): buildQuery(config)
         with self.assertRaises(ValueError): self.db.compileSearch(buildQuery(state('files.size', 'Between', '5', end='2')))
 
+    def test_model_flags_true_false_notset(self):
+        self.assertEqual(buildQuery(state('files.faceModelRan', 'True', '')), 'files.faceModelRan:eq:"1"')
+        self.assertEqual(buildQuery(state('files.faceModelRan', 'False', '')), 'files.faceModelRan:eq:"0"')
+        self.assertEqual(buildQuery(state('files.nudityModelRan', 'NotSet', '')), 'empty:files.nudityModelRan')
+        for name, flag in (('ran.jpg', 1), ('skipped.jpg', 0), ('never.jpg', None)):
+            self.db._conn.execute('INSERT INTO files(path, faceModelRan) VALUES (?,?)', (str(self.root / name), flag))
+        self.db._conn.execute('INSERT INTO file_locations(path, fileUid) SELECT path, uid FROM files')
+        for op, expected in (('True', 'ran.jpg'), ('False', 'skipped.jpg'), ('NotSet', 'never.jpg')):
+            query = buildQuery(state('files.faceModelRan', op, ''))
+            found = {Path(p).name for p in self.db.pathsMatching(None, query=query, allFolders=True)}
+            self.assertEqual(found, {expected}, op)
+        excluded = buildQuery(state('files.faceModelRan', 'True', '', exclude=True))
+        self.assertEqual({Path(p).name for p in self.db.pathsMatching(None, query=excluded, allFolders=True)},
+                         {'skipped.jpg', 'never.jpg'})
+
     def test_match_evidence(self):
         values = [('files.description_ai', 'A door outdoors.'), ('detections.faceName', 'Bernie'),
                   ('files.description_tags', 'front door; BEACH'), ('files.size', 40)]

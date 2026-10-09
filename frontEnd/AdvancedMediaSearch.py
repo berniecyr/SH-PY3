@@ -13,6 +13,13 @@ DATE_UNITS = {'mtime': 1, 'mtimeNs': 1000000000, 'captureMs': 1000, 'analyzedMs'
 DAY_FIELDS = {'exifDate'}
 TIME_FIELDS = {'exifTime'}
 TIME_OPS = ['At time', 'At or after time', 'At or before time', 'Between times']
+# Yes/no fields stored as 1, 0, or NULL when never set; add a field name here
+# to give it these choices.  NotSet is NULL, which eq:"" would never match.
+FLAG_FIELDS = {'faceModelRan', 'nudityModelRan'}
+FLAG_OPS = {'True': lambda field: field + ':eq:"1"',
+            'False': lambda field: field + ':eq:"0"',
+            'NotSet': lambda field: 'empty:' + field}
+NO_VALUE_OPS = ('Is blank', 'Is not blank') + tuple(FLAG_OPS)
 MODES = {'Contains': '', 'Whole word': 'word', 'Exactly equals': 'exact',
          'Has exact tag': 'tag', 'Equals number': 'eq', 'At least': 'ge',
          'At most': 'le', 'Greater than': 'gt', 'Less than': 'lt', 'Between': 'between'}
@@ -84,7 +91,9 @@ def buildQuery(state):
     for rule in state.get('rules', []):
         field, op = rule['field'], rule['op']
         value = rule.get('value', '')
-        if op in ('Is blank', 'Is not blank'):
+        if op in FLAG_OPS:
+            term = FLAG_OPS[op](field)
+        elif op in ('Is blank', 'Is not blank'):
             if field == 'all':
                 raise ValueError('Choose a specific field for blank/not blank.')
             term = ('empty:' if op == 'Is blank' else 'has:') + field
@@ -239,7 +248,9 @@ class AdvancedMediaSearchDialog(wx.Dialog):
             choices = list(TEXT_OPS)
             if key == 'all': choices = choices[:3]
             name = key.split('.')[-1]
-            if self._types.get(key) in ('INTEGER', 'REAL', 'NUMERIC'):
+            if name in FLAG_FIELDS:
+                choices = list(FLAG_OPS)
+            elif self._types.get(key) in ('INTEGER', 'REAL', 'NUMERIC'):
                 if name in TIME_FIELDS:
                     choices += TIME_OPS
                 else:
@@ -273,7 +284,7 @@ class AdvancedMediaSearchDialog(wx.Dialog):
 
     def _refresh(self, event=None):
         for _, _, op, value, end, _ in self._rows:
-            value.Enable(op.GetStringSelection() not in ('Is blank', 'Is not blank'))
+            value.Enable(op.GetStringSelection() not in NO_VALUE_OPS)
             end.Show(op.GetStringSelection() in ('Between', 'Between dates', 'Between times'))
         self.rows.Layout(); self.rows.FitInside()
         try:

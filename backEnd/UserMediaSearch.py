@@ -265,6 +265,8 @@ def compileQuery(query, fileColumns, detectionColumns, locationColumns=(), colum
         if node[0] not in ('not', 'and', 'or'):
             return term(node[1], node[2], node[0])
         if node[0] == 'not':
-            return '(NOT %s)' % visit(node[1])
+            # A comparison on an empty (NULL) value is unknown, not false, so
+            # a bare NOT would drop never-set records from an Exclude too.
+            return '(NOT COALESCE(%s, 0))' % visit(node[1])
         return '(%s %s %s)' % (visit(node[1]), node[0].upper(), visit(node[2]))
     return visit(tree), parameters
