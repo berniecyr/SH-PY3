@@ -78,7 +78,8 @@ def main():
             event = wx.ContextMenuEvent(wx.wxEVT_CONTEXT_MENU, view._fileList.GetId())
             event.SetPosition(view._fileList.ClientToScreen(wx.Point(5, 5)))
             view.OnThumbnailContextMenu(event)
-            assert labels == ['Show in Explorer', 'Rename file...'], labels
+            assert labels[:2] == ['Show in Explorer', 'Rename file...'], labels
+            assert 'Delete selection' in labels, labels
             assert view._fileList.getSelection() == str(paths[0])
             with patch('subprocess.Popen') as launch:
                 view._showInExplorer(str(paths[0]))

@@ -231,6 +231,11 @@ class ImageThumbGrid(wx.ScrolledWindow):
         self._thumbSize = thumbSize
         self._tiles = []
         self._selection = -1
+        # Every highlighted tile; _selection is the one the details pane shows
+        # and the keyboard moves from.  _anchor is where a Shift+click range
+        # starts.
+        self._marked = set()
+        self._anchor = -1
         self._cols = 1
 
         # LRU of indices whose bitmap is currently held.
@@ -273,6 +278,8 @@ class ImageThumbGrid(wx.ScrolledWindow):
         self._tiles = [_Tile(p) for p in paths]
         self._live = []
         self._selection = -1
+        self._marked = set()
+        self._anchor = -1
         self.Scroll(0, 0)
         self._relayout()
         self.Refresh()
@@ -285,6 +292,27 @@ class ImageThumbGrid(wx.ScrolledWindow):
         if 0 <= self._selection < len(self._tiles):
             return self._tiles[self._selection].path
         return None
+
+
+    ###########################################################
+    def getSelectedPaths(self):
+        """@return  Every highlighted file, in display order."""
+        indices = set(self._marked)
+        if 0 <= self._selection < len(self._tiles):
+            indices.add(self._selection)
+        return [self._tiles[i].path for i in sorted(indices)
+                if 0 <= i < len(self._tiles)]
+
+
+    ###########################################################
+    def selectAll(self):
+        """Highlight every tile (Ctrl+A)."""
+        if not self._tiles:
+            return
+        if self._selection < 0:
+            self._setSelection(0)
+        self._marked = set(range(len(self._tiles)))
+        self.Refresh()
 
 
     ###########################################################
@@ -436,7 +464,7 @@ class ImageThumbGrid(wx.ScrolledWindow):
             tile = self._tiles[index]
             rect = self._tileRect(index)
 
-            if index == self._selection:
+            if index == self._selection or index in self._marked:
                 dc.SetBrush(selBrush)
                 dc.SetPen(selPen)
                 dc.DrawRoundedRectangle(rect, _kSelectionRadius)
@@ -558,7 +586,26 @@ class ImageThumbGrid(wx.ScrolledWindow):
         index = self._hitTest(event.GetX(), event.GetY())
         # A click on empty space past the last tile must not fire a selection
         # event -- with lazy analysis, a stray event is a stray detection run.
-        if index >= 0:
+        if index < 0:
+            return
+        if event.ShiftDown() and self._anchor >= 0:
+            # Shift: the range from the anchor; Ctrl+Shift adds the range.
+            low, high = sorted((self._anchor, index))
+            span = set(range(low, high + 1))
+            marked = (self._marked | span) if event.ControlDown() else span
+            self._setSelection(index, keepAnchor=True)
+            self._marked = marked
+            self.Refresh()
+        elif event.ControlDown():
+            # Ctrl: add or remove this tile, keeping the rest.
+            marked = set(self.getSelectedIndices())
+            marked ^= {index}
+            if marked:
+                self._setSelection(index if index in marked else max(marked))
+                self._marked = marked
+                self._anchor = index
+                self.Refresh()
+        else:
             self._setSelection(index)
 
 
@@ -577,13 +624,26 @@ class ImageThumbGrid(wx.ScrolledWindow):
         self.GetEventHandler().ProcessEvent(activated)
 
 
+    def getSelectedIndices(self):
+        """@return  Indices of every highlighted tile, sorted."""
+        indices = set(self._marked)
+        if self._selection >= 0:
+            indices.add(self._selection)
+        return sorted(indices)
+
+
     def selectAtPosition(self, position):
-        """Select a context-clicked tile, ignoring blank space."""
+        """Select a context-clicked tile, ignoring blank space.
+
+        A right-click inside a multiple selection keeps it, so the menu acts
+        on all of it; anywhere else selects just that tile.
+        """
         index = self._hitTest(position.x, position.y)
         if index < 0:
             return False
         self.SetFocus()
-        self._setSelection(index)
+        if index not in self.getSelectedIndices():
+            self._setSelection(index)
         return True
 
 
@@ -602,6 +662,9 @@ class ImageThumbGrid(wx.ScrolledWindow):
             return
 
         key = event.GetKeyCode()
+        if key == ord('A') and event.ControlDown():
+            self.selectAll()
+            return
         current = self._selection if self._selection >= 0 else 0
         step = {wx.WXK_LEFT: -1, wx.WXK_RIGHT: 1,
                 wx.WXK_UP: -self._cols, wx.WXK_DOWN: self._cols}.get(key)
@@ -621,13 +684,19 @@ class ImageThumbGrid(wx.ScrolledWindow):
 
 
     ###########################################################
-    def _setSelection(self, index, notify=True):
+    def _setSelection(self, index, notify=True, keepAnchor=False):
         """Select a tile, scroll it into view and tell the parent.
 
         @param  index   Tile index.
-        @param  notify  False to select without firing the event.
+        @param  notify      False to select without firing the event.
+        @param  keepAnchor  True to keep where a Shift+click range starts.
         """
+        # Selecting one tile ends any multiple selection.
+        self._marked = {index}
+        if not keepAnchor:
+            self._anchor = index
         if index == self._selection:
+            self.Refresh()
             return
         self._selection = index
         self._scrollIntoView(index)

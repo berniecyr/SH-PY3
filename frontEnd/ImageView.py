@@ -607,18 +607,83 @@ class ImageView(BaseView):
             point = self._fileList.ScreenToClient(position)
             if not self._fileList.selectAtPosition(point):
                 return
-        path = self._fileList.getSelection()
-        if not path:
+        paths = self._fileList.getSelectedPaths()
+        if not paths:
             return
         menu = wx.Menu()
-        reveal = menu.Append(wx.ID_ANY, 'Show in Explorer')
-        rename = menu.Append(wx.ID_ANY, 'Rename file...')
-        menu.Bind(wx.EVT_MENU, lambda e: self._showInExplorer(path), reveal)
-        menu.Bind(wx.EVT_MENU, lambda e: self._renameFile(path), rename)
+        for action in self._selectionActions():
+            if action is None:
+                menu.AppendSeparator()
+                continue
+            label, minCount, maxCount, handler = action
+            item = menu.Append(wx.ID_ANY, label)
+            item.Enable(minCount <= len(paths) <= (maxCount or len(paths)))
+            menu.Bind(wx.EVT_MENU, lambda e, handler=handler: handler(list(paths)), item)
         try:
             self._fileList.PopupMenu(menu)
         finally:
             menu.Destroy()
+
+
+    def _selectionActions(self):
+        """The right-click menu: (label, fewest files, most files or None, handler).
+
+        Each handler takes the selected paths, in display order.  None is a
+        separator.  Add new selection actions here.
+        """
+        return [
+            ('Show in Explorer', 1, 1, lambda paths: self._showInExplorer(paths[0])),
+            ('Rename file...', 1, 1, lambda paths: self._renameFile(paths[0])),
+            None,
+            ('Delete selection', 1, None, self._deletePaths),
+            None,
+            ('Copy selection to a temporary folder and display in Explorer', 1, None,
+             lambda paths: self._copySelection(paths)),
+            ('Copy selection to a temporary folder, strip all EXIF data and display in Explorer',
+             1, None, lambda paths: self._copySelection(paths, stripExif=True)),
+            ('Copy selection to a temporary folder with folder structure and display in Explorer',
+             1, None, lambda paths: self._copySelection(paths, keepStructure=True)),
+        ]
+
+
+    def _copySelection(self, paths, keepStructure=False, stripExif=False):
+        """Copy files into a new temporary folder, optionally strip their
+        metadata, and open the folder.  The originals are only read.
+        """
+        from frontEnd import MediaSelectionActions as Actions
+        from appCommon.InstallPaths import getExifToolExe
+        if stripExif and getExifToolExe() is None:
+            wx.MessageBox(Actions.exifToolMissingMessage(), 'ExifTool not found',
+                          wx.OK | wx.ICON_INFORMATION, self)
+            return
+        steps = len(paths) * (2 if stripExif else 1)
+        progress = wx.ProgressDialog(
+            'Copy selection', 'Copying %d file(s)...' % len(paths), maximum=max(1, steps),
+            parent=self, style=wx.PD_APP_MODAL | wx.PD_CAN_ABORT | wx.PD_AUTO_HIDE)
+        try:
+            folder = Actions.makeTempFolder()
+
+            def copied(done, total, path):
+                # Update() runs the event loop, so the window keeps painting.
+                return progress.Update(min(done, steps - 1),
+                                       os.path.basename(path) if path else 'Copied.')[0]
+
+            copies, failed = Actions.copyFiles(paths, folder, keepStructure, copied)
+            if stripExif and copies:
+                def stripped(done, total):
+                    return progress.Update(min(len(paths) + done, steps - 1),
+                                           'Removing metadata...')[0]
+                failed += Actions.stripMetadata(copies, stripped)
+        except OSError as exc:
+            wx.MessageBox(str(exc), 'Copy selection', wx.OK | wx.ICON_ERROR, self)
+            return
+        finally:
+            progress.Destroy()
+        Actions.showInExplorer(folder)
+        if failed:
+            wx.MessageBox('%d file(s) could not be copied or cleaned:\n%s'
+                          % (len(failed), '\n'.join('%s: %s' % f for f in failed[:10])),
+                          'Copy selection', wx.OK | wx.ICON_WARNING, self)
 
 
     def OnThumbnailActivated(self, event):
@@ -697,52 +762,87 @@ class ImageView(BaseView):
         path = self._largeView.getPath()
         if path not in self._files:
             return
-        if self._busyPath or self._scanning or not self._workQueue.empty():
-            wx.MessageBox('Wait for Image view analysis to finish before deleting.',
-                          'Analysis in progress', wx.OK | wx.ICON_INFORMATION, self)
-            return
-        answer = wx.MessageBox(
-            'Move this file to the Recycle Bin and remove it from the image '
-            'database?\n\n%s' % path, 'Delete file',
-            # Yes is the default, so Delete then Enter deletes; the file can
-            # still be restored from the Recycle Bin.
-            wx.YES_NO | wx.YES_DEFAULT | wx.ICON_WARNING, self)
-        if answer != wx.YES:
-            self._largeView.SetFocus()
-            return
-        from frontEnd.RecycleBin import recycle
-        try:
-            recycle(path, self.GetTopLevelParent().GetHandle())
-        except OSError as exc:
-            wx.MessageBox(str(exc), 'Could not delete', wx.OK | wx.ICON_ERROR, self)
-            self._largeView.SetFocus()
-            return
-        db = self._getDb()
-        try:
-            if db is not None:
-                with self._dbLock:
-                    db.forgetFile(path)
-        except Exception as exc:
-            self._logger.exception('ImageView: could not forget a deleted file')
-            wx.MessageBox('The file is in the Recycle Bin, but its database record '
-                          'could not be removed: %s' % exc, 'Delete file',
-                          wx.OK | wx.ICON_WARNING, self)
-
         index = self._files.index(path)
-        self._files.remove(path)
-        if path in self._allFiles:
-            self._allFiles.remove(path)
-        if getattr(self, '_selectionScope', None) is not None and path in self._selectionScope:
-            self._selectionScope.remove(path)
-        self._detailPanel.clear()
-        self._fileList.setItems(self._files)
-        self._updateFolderLabel()
+        if not self._deletePaths([path]):
+            self._largeView.SetFocus()
+            return
         if self._files:
             # The next file, or the previous one when the last was deleted.
             self._showLarge(self._files[min(index, len(self._files) - 1)])
             self._largeView.SetFocus()
         else:
             self._closeLargeView()
+
+
+    def _deletePaths(self, paths):
+        """Confirm, then move files to the Recycle Bin and forget them.
+
+        @param  paths  Absolute paths, all in the current listing.
+        @return bool   True if anything was deleted.
+        """
+        if self._busyPath or self._scanning or not self._workQueue.empty():
+            wx.MessageBox('Wait for Image view analysis to finish before deleting.',
+                          'Analysis in progress', wx.OK | wx.ICON_INFORMATION, self)
+            return False
+        if len(paths) == 1:
+            question = ('Move this file to the Recycle Bin and remove it from the '
+                        'image database?\n\n%s' % paths[0])
+        else:
+            shown = '\n'.join(paths[:10]) + ('\n... and %d more' % (len(paths) - 10)
+                                             if len(paths) > 10 else '')
+            question = ('Move these %d files to the Recycle Bin and remove them '
+                        'from the image database?\n\n%s' % (len(paths), shown))
+        answer = wx.MessageBox(
+            question, 'Delete file' if len(paths) == 1 else 'Delete files',
+            # Yes is the default, so Delete then Enter deletes; the files can
+            # still be restored from the Recycle Bin.
+            wx.YES_NO | wx.YES_DEFAULT | wx.ICON_WARNING, self)
+        if answer != wx.YES:
+            return False
+
+        from frontEnd.RecycleBin import recycle
+        db = self._getDb()
+        deleted, failed, unforgotten = [], [], []
+        with wx.BusyCursor():
+            for path in paths:
+                try:
+                    recycle(path, self.GetTopLevelParent().GetHandle())
+                except OSError as exc:
+                    failed.append('%s: %s' % (path, exc))
+                    continue
+                deleted.append(path)
+                try:
+                    if db is not None:
+                        with self._dbLock:
+                            db.forgetFile(path)
+                except Exception:
+                    self._logger.exception('ImageView: could not forget a deleted file')
+                    unforgotten.append(path)
+
+        gone = set(deleted)
+        self._files = [p for p in self._files if p not in gone]
+        self._allFiles = [p for p in self._allFiles if p not in gone]
+        if getattr(self, '_selectionScope', None) is not None:
+            self._selectionScope = [p for p in self._selectionScope if p not in gone]
+        if deleted:
+            self._detailPanel.clear()
+            self._fileList.setItems(self._files)
+            self._updateFolderLabel()
+            if not self._largeView.IsShown():
+                self._setEmptyMessage(None if self._files else
+                                      'No files left in this listing.')
+        problems = []
+        if failed:
+            problems.append('%d file(s) could not be deleted:\n%s'
+                            % (len(failed), '\n'.join(failed[:10])))
+        if unforgotten:
+            problems.append('%d file(s) are in the Recycle Bin, but their database '
+                            'records could not be removed:\n%s'
+                            % (len(unforgotten), '\n'.join(unforgotten[:10])))
+        if problems:
+            wx.MessageBox('\n\n'.join(problems), 'Delete files',
+                          wx.OK | wx.ICON_WARNING, self)
+        return bool(deleted)
 
 
     def _showInExplorer(self, path):
