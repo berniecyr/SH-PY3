@@ -448,6 +448,9 @@ class ImageView(BaseView):
                                          self._closeLargeView)
         self._largeView.Hide()
         sizer.Add(self._largeView, 1, wx.EXPAND | wx.LEFT, _kCtrlPadding)
+        # Delete and Escape reach the large view wherever focus has gone in
+        # this tab -- after a click on the sort choice or the details pane.
+        self.Bind(wx.EVT_CHAR_HOOK, self._onLargeViewCharHook)
 
         # Shown INSTEAD of the grid when there is nothing in it.  An empty
         # grid is an empty white box, which reads as a fault rather than as
@@ -629,6 +632,25 @@ class ImageView(BaseView):
         self._listPanel.Layout()
         self._showLarge(path)
         self._largeView.SetFocus()
+
+
+    def _onLargeViewCharHook(self, event):
+        """Escape and Delete for the large view, whichever control has focus.
+
+        A text box keeps Delete for its own text; Escape still closes.
+        """
+        event.Skip()
+        if not self._largeView.IsShown():
+            return
+        key = event.GetKeyCode()
+        focus = wx.Window.FindFocus()
+        if key == wx.WXK_ESCAPE:
+            event.Skip(False)
+            self._closeLargeView()
+        elif key in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE) and not isinstance(
+                focus, (wx.TextCtrl, wx.ComboBox, wx.SearchCtrl)):
+            event.Skip(False)
+            self._deleteLargeViewFile()
 
 
     def _showLarge(self, path):
@@ -1621,10 +1643,18 @@ class ImageView(BaseView):
             return
         self._playbackAcceleratorLabels = []
         menuBar = self.GetTopLevelParent().GetMenuBar()
-        index = menuBar.FindMenu(MenuIds.kControlsMenu)
-        if index == wx.NOT_FOUND:
+        if menuBar is None:
             return
-        for item in menuBar.GetMenu(index).GetMenuItems():
+        items = []
+        index = menuBar.FindMenu(MenuIds.kControlsMenu)
+        if index != wx.NOT_FOUND:
+            items.extend(menuBar.GetMenu(index).GetMenuItems())
+        # Tools > Delete Clip owns the Del key, which the large image view
+        # needs for deleting the photo it shows.
+        deleteClip = MenuIds.getToolsMenuItem(menuBar, MenuIds.kDeleteClipMenu)
+        if deleteClip is not None:
+            items.append(deleteClip)
+        for item in items:
             label = item.GetItemLabel()
             if '\t' in label:
                 self._playbackAcceleratorLabels.append((item, label))
