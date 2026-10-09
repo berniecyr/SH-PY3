@@ -109,9 +109,9 @@ class SnapshotImportTests(unittest.TestCase):
     def test_boxes_near_time_query(self):
         dm = DataManager.__new__(DataManager)
         dm._connection = sqlite3.connect(":memory:"); dm._cur = dm._connection.cursor()
-        dm._cur.execute("CREATE TABLE objects (uid INTEGER PRIMARY KEY, camLoc TEXT)")
+        dm._cur.execute("CREATE TABLE objects (uid INTEGER PRIMARY KEY, camLoc TEXT, timeStart, timeStop)")
         dm._cur.execute("CREATE TABLE motion (objUid INTEGER, time INTEGER, x1, y1, x2, y2)")
-        dm._cur.executemany("INSERT INTO objects VALUES (?,?)", [(1, "Gate"), (2, "Yard")])
+        dm._cur.executemany("INSERT INTO objects VALUES (?,?,?,?)", [(1, "Gate", 900, 3000), (2, "Yard", 1000, 1000)])
         dm._cur.executemany("INSERT INTO motion VALUES (?,?,?,?,?,?)", [
             (1, 900, 0, 0, 1, 1), (1, 1050, 5, 5, 6, 6), (1, 3000, 9, 9, 9, 9),
             (2, 1000, 7, 7, 8, 8)])
