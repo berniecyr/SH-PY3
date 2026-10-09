@@ -19,6 +19,29 @@ class SearchSyntaxError(ValueError):
     pass
 
 
+# Time-of-day fields, stored as HHMMSS integers.  A between range on one of
+# these whose start is later than its end, like 190000,060000, spans midnight.
+TIME_FIELDS = frozenset(('exifTime',))
+
+
+def _timeBound(value):
+    """'19:00', '19:00:30', '190000' or '60059' -> HHMMSS digits as a string."""
+    value = value.strip()
+    if ':' in value:
+        parts = value.split(':')
+        if len(parts) not in (2, 3) or not all(p.isdigit() for p in parts):
+            raise SearchSyntaxError('Enter a time as HH:MM, HH:MM:SS or HHMMSS.')
+        parts = [int(p) for p in parts] + [0] * (3 - len(parts))
+    else:
+        if not value.isdigit() or len(value) > 6:
+            raise SearchSyntaxError('Enter a time as HH:MM, HH:MM:SS or HHMMSS.')
+        digits = value.zfill(6)
+        parts = [int(digits[0:2]), int(digits[2:4]), int(digits[4:6])]
+    if not (parts[0] < 24 and parts[1] < 60 and parts[2] < 60):
+        raise SearchSyntaxError('Enter a real time of day (00:00:00 to 23:59:59).')
+    return '%02d%02d%02d' % tuple(parts)
+
+
 def _tokens(query):
     if len(query) > 2048:
         raise SearchSyntaxError('Keep the search under 2048 characters.')
@@ -226,6 +249,14 @@ def compileQuery(query, fileColumns, detectionColumns, locationColumns=(), colum
             table, name, _ = items[0]
             if columnTypes and columnTypes.get(table + '.' + name, '').upper() not in ('INTEGER', 'REAL', 'NUMERIC'):
                 raise SearchSyntaxError('Numeric comparisons require a numeric field.')
+        if mode in ('ge', 'gt', 'le', 'lt', 'eq', 'between') and items[0][1] in TIME_FIELDS:
+            bounds = [_timeBound(v) for v in value.split(',')] if mode == 'between' else [_timeBound(value)]
+            if mode == 'between' and len(bounds) == 2 and bounds[0] > bounds[1]:
+                # Overnight: at or after the start, or at or before the end.
+                expression = items[0][2]
+                return '(%s OR %s)' % (contains(expression, bounds[0], 'ge'),
+                                       contains(expression, bounds[1], 'le'))
+            value = ','.join(bounds)
         if mode == 'tag' and any(name != 'description_tags' for _, name, _ in items):
             raise SearchSyntaxError('Exact tag matching requires the tags field.')
         return grouped(items, lambda name, expression, table: contains(expression, value, mode))

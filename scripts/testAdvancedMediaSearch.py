@@ -46,7 +46,7 @@ class AdvancedSearchTests(unittest.TestCase):
             dict(field='files.exifTime', op='Between times', value='19:00', end='06:00')])
         query = buildQuery(config)
         self.assertEqual(query, 'files.exifDate:between:"20260101,20260228" AND '
-                                '(files.exifTime:ge:"190000" OR files.exifTime:le:"60059")')
+                                'files.exifTime:between:"190000,060059"')
         rows = [('night.jpg', 20260115, 213000), ('early.jpg', 20260210, 52000),
                 ('day.jpg', 20260115, 120000), ('march.jpg', 20260305, 220000),
                 ('none.jpg', None, None)]
@@ -56,8 +56,21 @@ class AdvancedSearchTests(unittest.TestCase):
         self.db._conn.execute('INSERT INTO file_locations(path, fileUid) SELECT path, uid FROM files')
         found = {Path(p).name for p in self.db.pathsMatching(None, query=query, allFolders=True)}
         self.assertEqual(found, {'night.jpg', 'early.jpg'})
+        # Typed by hand: colon times and unpadded numbers mean the same.
+        for typed in ('files.exifTime:between:"19:00,06:00:59"', 'files.exifTime:between:"190000,60059"'):
+            typedQuery = 'files.exifDate:between:"20260101,20260228" AND ' + typed
+            self.assertEqual({Path(p).name for p in self.db.pathsMatching(None, query=typedQuery, allFolders=True)},
+                             {'night.jpg', 'early.jpg'})
+        daytime = {Path(p).name for p in self.db.pathsMatching(
+            None, query='files.exifTime:between:"08:00,17:30"', allFolders=True)}
+        self.assertEqual(daytime, {'day.jpg'})
+        with self.assertRaises(Exception):
+            self.db.compileSearch('files.exifTime:ge:"25:00"')
+        overnight = 'files.exifTime:between:"19:00,06:00"'
+        self.assertEqual(matchingValues(overnight, [('files.exifTime', 52000)]), [('files.exifTime', '52000')])
+        self.assertEqual(matchingValues(overnight, [('files.exifTime', 120000)]), [])
         self.assertEqual(buildQuery(state('files.exifTime', 'Between times', '08:00', end='17:30')),
-                         'files.exifTime:between:"80000,173059"')
+                         'files.exifTime:between:"080000,173059"')
         self.assertEqual(buildQuery(state('files.exifDate', 'On date', '2026-01-15')),
                          'files.exifDate:between:"20260115,20260115"')
         for bad in ('25:00', '7pm', '12:60'):

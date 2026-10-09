@@ -65,18 +65,18 @@ def timeValue(value, end=False):
 
 def timeTerm(field, op, value, end):
     """A time-of-day condition; a range whose start is after its end spans midnight."""
+    # Always six digits, so 06:00 reads as 060000 and never as 60000.
     if op == 'At or after time':
-        return '%s:ge:"%d"' % (field, timeValue(value))
+        return '%s:ge:"%06d"' % (field, timeValue(value))
     if op == 'At or before time':
-        return '%s:le:"%d"' % (field, timeValue(value, end=True))
+        return '%s:le:"%06d"' % (field, timeValue(value, end=True))
     if op == 'At time':
         end = value
     if not end:
         raise ValueError('Enter a value for each condition, or remove the empty condition.')
-    start, stop = timeValue(value), timeValue(end, end=True)
-    if start <= stop:
-        return '%s:between:"%d,%d"' % (field, start, stop)
-    return '(%s:ge:"%d" OR %s:le:"%d")' % (field, start, field, stop)
+    # One between condition even overnight; the search treats a start later
+    # than the end as crossing midnight.
+    return '%s:between:"%06d,%06d"' % (field, timeValue(value), timeValue(end, end=True))
 
 
 def buildQuery(state):
@@ -313,7 +313,7 @@ class AdvancedMediaSearchDialog(wx.Dialog):
 def matchingValues(query, values):
     """Positive-term evidence, not a second implementation of record selection."""
     from decimal import Decimal, InvalidOperation
-    from backEnd.UserMediaSearch import parse, wholeWordMatch
+    from backEnd.UserMediaSearch import parse, wholeWordMatch, TIME_FIELDS, _timeBound
     aliases = dict(tags='files.description_tags', ai='files.description_ai',
                    person='detections.faceName', name='filename', folder='file_locations.path',
                    path='file_locations.path', contains='all')
@@ -346,10 +346,14 @@ def matchingValues(query, values):
             else:
                 try:
                     number = Decimal(text)
+                    isTime = name.split('.')[-1] in TIME_FIELDS
                     if mode == 'between':
-                        lo, hi = map(Decimal, term.split(',')); matched = lo <= number <= hi
+                        bounds = term.split(',')
+                        lo, hi = (Decimal(_timeBound(b) if isTime else b) for b in bounds)
+                        # A time range whose start is after its end spans midnight.
+                        matched = (number >= lo or number <= hi) if isTime and lo > hi else lo <= number <= hi
                     else:
-                        target = Decimal(term)
+                        target = Decimal(_timeBound(term) if isTime else term)
                         matched = {'ge': number >= target, 'gt': number > target,
                                    'le': number <= target, 'lt': number < target, 'eq': number == target}[mode]
                 except (InvalidOperation, ValueError): matched = False
