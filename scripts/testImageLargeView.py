@@ -110,6 +110,17 @@ def main():
             wheel(view, 120); wheel(view, 120); assert view._largeView.getPath() == paths[0]
             assert view._fileList.getSelection() == paths[0], 'grid follows'
 
+            # End jumps to the last file and Home back to the first; the grid
+            # selection and the details panel follow.
+            key(view, wx.WXK_END)
+            assert view._largeView.getPath() == paths[-1]
+            assert view._fileList.getSelection() == paths[-1]
+            assert view._detailPanel.getPath() == paths[-1]
+            key(view, wx.WXK_HOME)
+            assert view._largeView.getPath() == paths[0]
+            assert view._fileList.getSelection() == paths[0]
+            assert view._detailPanel.getPath() == paths[0]
+
             # Delete, answered No: nothing happens.
             wheel(view, -120); wheel(view, -120)
             with patch('wx.MessageBox', return_value=wx.NO) as box, \

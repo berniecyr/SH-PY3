@@ -5,8 +5,8 @@
 One image shown as large as the Images tab's centre panel allows.
 
 Opened by double-clicking a thumbnail.  The mouse wheel steps through the
-listing (down = next, up = previous), Delete asks to delete the file, and
-Escape goes back to the thumbnails.  The view only reports those requests;
+listing (down = next, up = previous), Home and End jump to its first and last
+file, Delete asks to delete the file, and Escape goes back to the thumbnails.  The view only reports those requests;
 ImageView decides what they do.
 """
 
@@ -70,6 +70,8 @@ class ImageLargeView(wx.Panel):
 
         @param  parent    The parent window.
         @param  onStep    f(+1 or -1) -- show the next or previous file.
+                          f(None, first) -- Home/End: the first (True) or
+                          last (False) file in the listing.
         @param  onDelete  f() -- delete the file being shown.
         @param  onClose   f() -- return to the thumbnails.
         """
@@ -140,12 +142,16 @@ class ImageLargeView(wx.Panel):
 
     ###########################################################
     def OnKeyDown(self, event):
-        """Escape, Delete, and the arrows/page keys as the wheel."""
+        """Escape, Delete, Home/End, and the arrows/page keys as the wheel."""
         key = event.GetKeyCode()
         if key == wx.WXK_ESCAPE:
             self._onClose()
         elif key in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE):
             self._onDelete()
+        elif key in (wx.WXK_HOME, wx.WXK_NUMPAD_HOME):
+            self._onStep(None, True)
+        elif key in (wx.WXK_END, wx.WXK_NUMPAD_END):
+            self._onStep(None, False)
         elif key in (wx.WXK_RIGHT, wx.WXK_DOWN, wx.WXK_PAGEDOWN):
             self._onStep(1)
         elif key in (wx.WXK_LEFT, wx.WXK_UP, wx.WXK_PAGEUP):

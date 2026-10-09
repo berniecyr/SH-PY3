@@ -666,12 +666,18 @@ class ImageView(BaseView):
             index + 1, len(self._files), os.path.basename(path)), bitmap)
 
 
-    def _stepLargeView(self, step):
-        """Mouse wheel: the next (+1) or previous (-1) file, stopping at the ends."""
+    def _stepLargeView(self, step, first=None):
+        """Mouse wheel: the next (+1) or previous (-1) file, stopping at the ends.
+
+        With step None, Home/End: the first (first=True) or last file.
+        """
         path = self._largeView.getPath()
         if path not in self._files:
             return
-        index = self._files.index(path) + step
+        if step is None:
+            index = 0 if first else len(self._files) - 1
+        else:
+            index = self._files.index(path) + step
         if 0 <= index < len(self._files):
             self._showLarge(self._files[index])
 
