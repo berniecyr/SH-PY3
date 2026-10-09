@@ -66,6 +66,8 @@ def addMainMenus(frame):
     tools = wx.Menu()
     deleteClip = tools.Append(wx.ID_ANY, MenuIds.kDeleteClipMenuEx)
     deleteClip.Enable(False)
+    frame.selectAllClips = tools.Append(wx.ID_ANY, '&Select All Clips\tCtrl-A')
+    frame.addCamera = tools.Append(wx.ID_ANY, '&Add Camera...\tCtrl-N')
     menuBar.Append(tools, MenuIds.kToolsMenuEx)
     frame.SetMenuBar(menuBar)
     return deleteClip
@@ -121,10 +123,29 @@ def main():
             if view._largeView.IsShown():
                 failures.append('Escape did nothing %s' % label)
                 view._closeLargeView()
-        # Leaving the Images tab puts the Delete Clip shortcut back.
+        # While the tab is active, Select All Clips gives up Ctrl-A (a menu
+        # shortcut is matched before the grid sees the key, as Del was) and
+        # Add Camera keeps Ctrl-N.  A posted key cannot carry Ctrl, so the
+        # labels are checked and the grid's own Ctrl+A handling is driven.
+        if suspend:
+            if '\t' in frame.selectAllClips.GetItemLabel():
+                failures.append('Select All Clips still holds Ctrl-A: %r'
+                                % frame.selectAllClips.GetItemLabel())
+            if '\t' not in frame.addCamera.GetItemLabel():
+                failures.append('Add Camera lost its Ctrl-N shortcut')
+        grid = view._fileList
+        key = wx.KeyEvent(wx.wxEVT_KEY_DOWN)
+        key.SetKeyCode(ord('A')); key.SetControlDown(True)
+        grid.OnKeyDown(key)
+        if grid.getSelectedPaths() != paths:
+            failures.append('Ctrl+A did not select every thumbnail: %r'
+                            % grid.getSelectedPaths())
+        # Leaving the Images tab puts the shortcuts back.
         view._restorePlaybackAccelerators()
         if not deleteClip.GetItemLabel().endswith('\t' + MenuIds._kDeleteKey):
             failures.append('Delete Clip shortcut not restored: %r' % deleteClip.GetItemLabel())
+        if '\t' not in frame.selectAllClips.GetItemLabel():
+            failures.append('Select All Clips shortcut not restored')
 
     runner = steps()
 

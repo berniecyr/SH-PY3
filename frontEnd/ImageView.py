@@ -171,6 +171,18 @@ def _isMediaFile(name):
     return name.lower().endswith(_kMediaExts)
 
 
+# Keys this tab handles itself, which a Tools menu shortcut would otherwise
+# take first on Windows (even with the item disabled).
+_kImageTabKeys = frozenset(('del', 'delete', 'ctrl+a'))
+
+
+def _acceleratorKey(label):
+    """'&Select All Clips\\tCtrl-A' -> 'ctrl+a'; '' when there is none."""
+    if '\t' not in label:
+        return ''
+    return label.split('\t', 1)[1].strip().lower().replace('-', '+')
+
+
 ##############################################################################
 class ImageView(BaseView):
     """Browse local photos and videos and view our detections for them."""
@@ -1757,11 +1769,15 @@ class ImageView(BaseView):
         index = menuBar.FindMenu(MenuIds.kControlsMenu)
         if index != wx.NOT_FOUND:
             items.extend(menuBar.GetMenu(index).GetMenuItems())
-        # Tools > Delete Clip owns the Del key, which the large image view
-        # needs for deleting the photo it shows.
-        deleteClip = MenuIds.getToolsMenuItem(menuBar, MenuIds.kDeleteClipMenu)
-        if deleteClip is not None:
-            items.append(deleteClip)
+        # Tools menu shortcuts on keys this tab uses itself: Delete Clip (Del)
+        # would swallow the large view's Delete, and Select All Clips
+        # (Ctrl-A) the thumbnail grid's select-all.  Other Tools shortcuts,
+        # like Add Camera, keep working here.
+        index = menuBar.FindMenu(MenuIds.kToolsMenu)
+        if index != wx.NOT_FOUND:
+            items.extend(item for item in menuBar.GetMenu(index).GetMenuItems()
+                         if _kImageTabKeys.intersection(
+                             [_acceleratorKey(item.GetItemLabel())]))
         for item in items:
             label = item.GetItemLabel()
             if '\t' in label:
