@@ -124,7 +124,12 @@ _kFileColumns = [
     ("analyzerVersion", "INTEGER"), ("modelSig", "TEXT"),
     ("thumbPath", "TEXT"), ("error", "TEXT"),
     ("description_tags", "TEXT"), ("description_ai", "TEXT"),
+    ("faceModelRan", "INTEGER"), ("nudityModelRan", "INTEGER"),
 ]
+
+# Optional-model flags: 1 when that model ran during the file's analysis, 0
+# when it was skipped because it was off or not loaded, NULL if never analysed.
+_kModelRanColumns = ("faceModelRan", "nudityModelRan")
 
 _kDetectionColumns = [
     ("fileUid", "INTEGER"), ("atMs", "INTEGER"),
@@ -223,7 +228,8 @@ class UserMediaDb(object):
                 captureMs INTEGER,
                 analyzedMs INTEGER, analyzerVersion INTEGER, modelSig TEXT,
                 thumbPath TEXT, error TEXT,
-                description_tags TEXT, description_ai TEXT)""")
+                description_tags TEXT, description_ai TEXT,
+                faceModelRan INTEGER, nudityModelRan INTEGER)""")
         c.execute("""
             CREATE TABLE IF NOT EXISTS detections (
                 uid INTEGER PRIMARY KEY,
@@ -251,17 +257,31 @@ class UserMediaDb(object):
         PRAGMA user_version is 0 everywhere in this tree, so introducing a
         version number here would make this database the odd one out.
         """
+        added = set()
         for table, columns in (("files", _kFileColumns),
                                ("detections", _kDetectionColumns)):
             have = {row["name"] for row in
                     self._conn.execute("PRAGMA table_info(%s)" % table)}
             for name, sqlType in columns:
                 if name not in have:
+                    added.add(name)
                     self._conn.execute("ALTER TABLE %s ADD COLUMN %s %s"
                                        % (table, name, sqlType))
                     if self._logger is not None:
                         self._logger.info("UserMediaDb: added %s.%s"
                                           % (table, name))
+
+        # One-time backfill when the model flags first appear: records
+        # analysed before they existed are marked as done for both models.
+        for name in _kModelRanColumns:
+            if name in added:
+                cur = self._conn.execute(
+                    "UPDATE files SET %s = 1 "
+                    "WHERE analyzedMs IS NOT NULL AND error IS NULL"
+                    % name)
+                if self._logger is not None:
+                    self._logger.info("UserMediaDb: marked %d existing "
+                                      "record(s) %s=1" % (cur.rowcount, name))
         self._conn.commit()
 
         # One content record, many physical locations. Existing records remain
@@ -382,7 +402,8 @@ class UserMediaDb(object):
             c.execute('DELETE FROM detections WHERE fileUid=?', (target,))
             c.execute('UPDATE detections SET fileUid=? WHERE fileUid=?', (target, source))
             columns = ('kind', 'width', 'height', 'durationMs', 'captureMs',
-                       'analyzedMs', 'analyzerVersion', 'modelSig', 'error')
+                       'analyzedMs', 'analyzerVersion', 'modelSig', 'error',
+                       'faceModelRan', 'nudityModelRan')
             c.execute('UPDATE files SET '+','.join(name+'=?' for name in columns)+' WHERE uid=?',
                       tuple(b[name] for name in columns)+(target,))
         c.execute('DELETE FROM detections WHERE fileUid=?', (source,))
@@ -434,7 +455,8 @@ class UserMediaDb(object):
                     current = None
                 else:
                     c.execute('DELETE FROM detections WHERE fileUid=?', (current['uid'],))
-                    c.execute('UPDATE files SET contentHash=?, analyzedMs=NULL WHERE uid=?',
+                    c.execute('UPDATE files SET contentHash=?, analyzedMs=NULL, '
+                              'faceModelRan=NULL, nudityModelRan=NULL WHERE uid=?',
                               (digest, current['uid']))
             candidates = c.execute('SELECT uid FROM files WHERE contentHash=? ORDER BY uid', (digest,)).fetchall()
             if current and current['contentHash'] is None:
@@ -527,7 +549,8 @@ class UserMediaDb(object):
 
         @param  path    Absolute path of the file.
         @param  result  Dict from UserMediaAnalysis: kind, width, height,
-                        durationMs, captureMs, modelSig, error, detections.
+                        durationMs, captureMs, modelSig, error, detections,
+                        faceModelRan, nudityModelRan.
         @return uid     The file's row id.
         """
         try:
@@ -546,8 +569,9 @@ class UserMediaDb(object):
         c.execute("""
             INSERT INTO files (path, size, mtime, kind, width, height,
                                durationMs, captureMs, analyzedMs,
-                               analyzerVersion, modelSig, error)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                               analyzerVersion, modelSig, error,
+                               faceModelRan, nudityModelRan)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(path) DO UPDATE SET
                 size=excluded.size, mtime=excluded.mtime,
                 kind=excluded.kind, width=excluded.width,
@@ -555,11 +579,15 @@ class UserMediaDb(object):
                 captureMs=excluded.captureMs,
                 analyzedMs=excluded.analyzedMs,
                 analyzerVersion=excluded.analyzerVersion,
-                modelSig=excluded.modelSig, error=excluded.error""",
+                modelSig=excluded.modelSig, error=excluded.error,
+                faceModelRan=excluded.faceModelRan,
+                nudityModelRan=excluded.nudityModelRan""",
             (canonical, size, mtime, result.get("kind"), result.get("width"),
              result.get("height"), result.get("durationMs"),
              result.get("captureMs"), int(time.time() * 1000),
-             kAnalyzerVersion, result.get("modelSig"), result.get("error")))
+             kAnalyzerVersion, result.get("modelSig"), result.get("error"),
+             1 if result.get("faceModelRan") else 0,
+             1 if result.get("nudityModelRan") else 0))
 
         row = c.execute("SELECT uid FROM files WHERE path = ?",
                         (canonical,)).fetchone()

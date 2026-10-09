@@ -90,7 +90,9 @@ def check(label, condition, detail=""):
 class _StubClient(object):
     """Stands in for DetectionServiceClient, returning scripted results."""
 
-    def __init__(self, dets=None, faces=None, nudity=None):
+    def __init__(self, dets=None, faces=None, nudity=None, caps=None):
+        self.caps = caps if caps is not None else {"face": True,
+                                                   "nudity": True}
         self.dets = dets or []
         self.faces = faces or []
         self.nudeResults = nudity or []
@@ -100,7 +102,7 @@ class _StubClient(object):
         self.lastFaceCropShape = None
 
     def ping(self):
-        return {"face": True, "nudity": True}
+        return self.caps
 
     def yolo(self, imgRgb, conf):
         self.yoloCalls += 1
@@ -314,6 +316,7 @@ def testDatabase():
     db.saveResult(fixture, {
         "kind": "image", "width": 640, "height": 480, "durationMs": None,
         "captureMs": 1234, "modelSig": sig, "error": None,
+        "faceModelRan": True, "nudityModelRan": False,
         "detections": [{"atMs": 0, "type": "person", "subType": "person",
                         "conf": 0.95, "x1": 0, "y1": 0, "x2": 1, "y2": 1}]})
     fileCount, detCount = db.stats()
@@ -350,7 +353,28 @@ def testDatabase():
     db3 = UserMediaDb.UserMediaDb().open(tmp)
     have = {r[1] for r in db3._conn.execute("PRAGMA table_info(detections)")}
     check("a missing column is re-added on open", "nudityDetail" in have)
+    check("new analysis stores the model flags",
+          tuple(db3.getFile(fixture)[k] for k in
+                ("faceModelRan", "nudityModelRan")) == (1, 0))
     db3.close()
+
+    # Upgrading a database from before the model flags: analysed records are
+    # marked as done once; never-analysed records stay NULL.
+    conn = sqlite3.connect(tmp)
+    conn.execute("ALTER TABLE files DROP COLUMN faceModelRan")
+    conn.execute("ALTER TABLE files DROP COLUMN nudityModelRan")
+    conn.execute("INSERT INTO files (path) VALUES ('never-analysed.jpg')")
+    conn.commit(); conn.close()
+    db4 = UserMediaDb.UserMediaDb().open(tmp)
+    rows = {r["path"]: (r["faceModelRan"], r["nudityModelRan"]) for r in
+            db4._conn.execute("SELECT * FROM files")}
+    check("upgrade marks analysed records done", rows[fixture] == (1, 1))
+    check("upgrade leaves unanalysed records NULL",
+          rows["never-analysed.jpg"] == (None, None))
+    check("model flags are advanced-search filters",
+          db4.pathsMatching(None, query="nudityModelRan:eq:1",
+                            allFolders=True) == {fixture})
+    db4.close()
 
     os.remove(fixture)
     for suffix in ("", "-wal", "-shm"):
@@ -418,6 +442,15 @@ def testStillEndToEnd():
           d.get("gender") == "F" and d.get("age") == 30)
     check("unnamed when no library is loaded", not d.get("faceName"))
     check("modelSig recorded", "yolo26s.pt" in result["modelSig"])
+    check("face model flagged as run", result["faceModelRan"] is True)
+    check("nudity model flagged as skipped (off in config)",
+          result["nudityModelRan"] is False)
+
+    unloaded = _StubClient(dets=client.dets, faces=client.faces,
+                           caps={"face": False, "nudity": False})
+    result = UMA.analyzeStill(tmp, unloaded, cfg)
+    check("face flagged as skipped when the service has it unloaded",
+          result["faceModelRan"] is False)
 
     bad = os.path.join(tempfile.gettempdir(), "test_broken.jpg")
     with open(bad, "wb") as f:

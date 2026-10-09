@@ -148,6 +148,29 @@ def modelSignature(cfg):
 
 
 ##############################################################################
+def optionalModelsRunning(client, cfg):
+    """Which optional models an analysis right now would actually run.
+
+    A model counts only when the config turns it on AND the detection service
+    has it loaded; otherwise the service quietly returns nothing for it.
+
+    @param  client  A DetectionServiceClient.
+    @param  cfg     The ImageCheckConfig dict.
+    @return dict    {"faceModelRan": bool, "nudityModelRan": bool}
+    """
+    try:
+        caps = client.ping() or {}
+    except Exception:
+        caps = {}
+    return {
+        "faceModelRan": bool(cfg.get("RUN_FACE")) and bool(caps.get("face")),
+        "nudityModelRan": (bool(cfg.get("RUN_NUDITY"))
+                           and bool(ImageCheckConfig.enabledNudeThresholds(cfg))
+                           and bool(caps.get("nudity"))),
+    }
+
+
+##############################################################################
 def loadConfig():
     """@return  The same config dict the cameras are using right now."""
     return ImageCheckConfig.loadConfig()
@@ -422,12 +445,14 @@ def analyzeStill(path, client, cfg, logger=None):
     @param  client  A DetectionServiceClient.
     @param  cfg     The ImageCheckConfig dict.
     @param  logger  Optional logger.
-    @return dict    kind/width/height/captureMs/modelSig/error/detections.
+    @return dict    kind/width/height/captureMs/modelSig/error/detections,
+                    plus faceModelRan/nudityModelRan.
     """
     result = {"kind": "image", "width": None, "height": None,
               "durationMs": None, "captureMs": None,
               "modelSig": modelSignature(cfg), "error": None,
-              "detections": [], "elapsedMs": 0}
+              "detections": [], "elapsedMs": 0,
+              "faceModelRan": False, "nudityModelRan": False}
 
     started = time.time()
     try:
@@ -442,7 +467,9 @@ def analyzeStill(path, client, cfg, logger=None):
     result["captureMs"] = _captureTimeMs(path)
 
     try:
+        running = optionalModelsRunning(client, cfg)
         result["detections"] = analyzeFrame(frame, client, cfg, 0, logger)
+        result.update(running)
     except Exception as e:
         result["error"] = "Detection failed: %s" % e
         if logger is not None:
@@ -477,7 +504,8 @@ def analyzeVideo(path, client, cfg, sampleSecs=kDefaultSampleSecs,
               "durationMs": None, "captureMs": None,
               "modelSig": modelSignature(cfg), "error": None,
               "detections": [], "elapsedMs": 0, "sampled": 0,
-              "truncated": False}
+              "truncated": False,
+              "faceModelRan": False, "nudityModelRan": False}
 
     started = time.time()
     try:
@@ -512,6 +540,7 @@ def analyzeVideo(path, client, cfg, sampleSecs=kDefaultSampleSecs,
         total = min(planned, maxSamples)
         result["truncated"] = planned > maxSamples
 
+        running = optionalModelsRunning(client, cfg)
         detections = []
         for index in range(total):
             if cancelFn is not None and cancelFn():
@@ -536,6 +565,9 @@ def analyzeVideo(path, client, cfg, sampleSecs=kDefaultSampleSecs,
                 progressFn(index + 1, total)
 
         result["detections"] = detections
+        # Ran means at least one sampled frame went through the model.
+        if result["sampled"]:
+            result.update(running)
     finally:
         cap.release()
 
@@ -560,7 +592,7 @@ def analyzeFile(path, client, cfg, logger=None, **kwargs):
     return {"kind": None, "width": None, "height": None, "durationMs": None,
             "captureMs": None, "modelSig": modelSignature(cfg),
             "error": "Not a file type we can read.", "detections": [],
-            "elapsedMs": 0}
+            "elapsedMs": 0, "faceModelRan": False, "nudityModelRan": False}
 
 
 ##############################################################################
