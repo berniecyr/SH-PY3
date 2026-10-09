@@ -98,7 +98,8 @@ from vitaToolbox.wx.TranslucentStaticText import TranslucentStaticText
 # Local imports...
 from frontEnd.BaseView import BaseView
 from frontEnd.ImageDetailPanel import ImageDetailPanel
-from frontEnd.ImageThumbGrid import ImageThumbGrid, EVT_THUMB_SELECTED, EVT_THUMB_READY
+from frontEnd.ImageThumbGrid import ImageThumbGrid, EVT_THUMB_SELECTED, EVT_THUMB_READY, EVT_THUMB_ACTIVATED
+from frontEnd.ImageLargeView import ImageLargeView
 from backEnd import UserMediaAnalysis
 from backEnd import UserMediaFolderImport
 from backEnd.UserMediaDb import UserMediaDb
@@ -438,7 +439,15 @@ class ImageView(BaseView):
         self._fileList.Bind(EVT_THUMB_SELECTED, self.OnFileSelected)
         self._fileList.Bind(EVT_THUMB_READY, self.OnThumbnailReady)
         self._fileList.Bind(wx.EVT_CONTEXT_MENU, self.OnThumbnailContextMenu)
+        self._fileList.Bind(EVT_THUMB_ACTIVATED, self.OnThumbnailActivated)
         sizer.Add(self._fileList, 1, wx.EXPAND | wx.LEFT, _kCtrlPadding)
+
+        # Takes the grid's place while one file is shown large.
+        self._largeView = ImageLargeView(self._listPanel, self._stepLargeView,
+                                         self._deleteLargeViewFile,
+                                         self._closeLargeView)
+        self._largeView.Hide()
+        sizer.Add(self._largeView, 1, wx.EXPAND | wx.LEFT, _kCtrlPadding)
 
         # Shown INSTEAD of the grid when there is nothing in it.  An empty
         # grid is an empty white box, which reads as a fault rather than as
@@ -533,7 +542,12 @@ class ImageView(BaseView):
                          the list.
         """
         showList = message is None
+        # Whatever changed the listing also ends a large view of it.
+        wasLarge = self._largeView.IsShown()
+        self._largeView.Hide()
         self._fileList.Show(showList)
+        if wasLarge:
+            self._fileList.SetFocus()
         self._emptyLabel.Show(not showList)
         if message is not None:
             self._emptyLabel.SetLabel(message)
@@ -602,6 +616,103 @@ class ImageView(BaseView):
             self._fileList.PopupMenu(menu)
         finally:
             menu.Destroy()
+
+
+    def OnThumbnailActivated(self, event):
+        """A thumbnail was double-clicked: show it as large as the panel."""
+        path = event.getPath()
+        if path not in self._files:
+            return
+        self._fileList.Hide()
+        self._emptyLabel.Hide()
+        self._largeView.Show()
+        self._listPanel.Layout()
+        self._showLarge(path)
+        self._largeView.SetFocus()
+
+
+    def _showLarge(self, path):
+        """Show one listed file in the large view, keeping the grid in step."""
+        index = self._files.index(path)
+        self._fileList.selectPath(path)
+        if self._detailPanel.getPath() != path:
+            self._detailPanel.setFile(path, path.lower().endswith(_kVideoExts))
+            self._showStoredDetections(path)
+        self._updateVideoPreview()
+        _, bitmap, _ = self._fileList.getSelectedThumbnail()
+        self._largeView.setFile(path, '%d of %d   %s' % (
+            index + 1, len(self._files), os.path.basename(path)), bitmap)
+
+
+    def _stepLargeView(self, step):
+        """Mouse wheel: the next (+1) or previous (-1) file, stopping at the ends."""
+        path = self._largeView.getPath()
+        if path not in self._files:
+            return
+        index = self._files.index(path) + step
+        if 0 <= index < len(self._files):
+            self._showLarge(self._files[index])
+
+
+    def _closeLargeView(self):
+        """Escape: back to the thumbnails, at and on the last file viewed."""
+        path = self._largeView.getPath()
+        self._largeView.Hide()
+        self._setEmptyMessage(None if self._files else 'No files left in this listing.')
+        if path in self._files:
+            self._fileList.selectPath(path)
+        self._fileList.SetFocus()
+
+
+    def _deleteLargeViewFile(self):
+        """Delete: move the shown file to the Recycle Bin and forget it."""
+        path = self._largeView.getPath()
+        if path not in self._files:
+            return
+        if self._busyPath or self._scanning or not self._workQueue.empty():
+            wx.MessageBox('Wait for Image view analysis to finish before deleting.',
+                          'Analysis in progress', wx.OK | wx.ICON_INFORMATION, self)
+            return
+        answer = wx.MessageBox(
+            'Move this file to the Recycle Bin and remove it from the image '
+            'database?\n\n%s' % path, 'Delete file',
+            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING, self)
+        if answer != wx.YES:
+            self._largeView.SetFocus()
+            return
+        from frontEnd.RecycleBin import recycle
+        try:
+            recycle(path, self.GetTopLevelParent().GetHandle())
+        except OSError as exc:
+            wx.MessageBox(str(exc), 'Could not delete', wx.OK | wx.ICON_ERROR, self)
+            self._largeView.SetFocus()
+            return
+        db = self._getDb()
+        try:
+            if db is not None:
+                with self._dbLock:
+                    db.forgetFile(path)
+        except Exception as exc:
+            self._logger.exception('ImageView: could not forget a deleted file')
+            wx.MessageBox('The file is in the Recycle Bin, but its database record '
+                          'could not be removed: %s' % exc, 'Delete file',
+                          wx.OK | wx.ICON_WARNING, self)
+
+        index = self._files.index(path)
+        self._files.remove(path)
+        if path in self._allFiles:
+            self._allFiles.remove(path)
+        if getattr(self, '_selectionScope', None) is not None and path in self._selectionScope:
+            self._selectionScope.remove(path)
+        self._detailPanel.clear()
+        self._fileList.setItems(self._files)
+        self._updateFolderLabel()
+        if self._files:
+            # The next file, or the previous one when the last was deleted.
+            self._showLarge(self._files[min(index, len(self._files) - 1)])
+            self._largeView.SetFocus()
+        else:
+            self._closeLargeView()
 
 
     def _showInExplorer(self, path):

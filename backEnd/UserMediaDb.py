@@ -330,6 +330,41 @@ class UserMediaDb(object):
             'SELECT path FROM file_locations WHERE fileUid=? ORDER BY path', (row['uid'],))]
 
 
+    def forgetFile(self, path):
+        """Drop one path from the database after its file has been deleted.
+
+        Other copies of the same content keep the record, its analysis and
+        its descriptions; the last copy takes the record with it.
+
+        @param  path  Absolute path that no longer exists.
+        @return int   How many other indexed copies remain.
+        """
+        c = self._conn
+        c.execute('BEGIN IMMEDIATE')
+        try:
+            row = self.getFile(path)
+            if row is None:
+                c.rollback()
+                return 0
+            uid = row['uid']
+            c.execute('DELETE FROM file_locations WHERE path=?', (path,))
+            others = [r[0] for r in c.execute(
+                'SELECT path FROM file_locations WHERE fileUid=? ORDER BY path',
+                (uid,))]
+            if others:
+                # files.path names one copy; hand it to a copy that still exists.
+                c.execute('UPDATE files SET path=? WHERE uid=? '
+                          'AND path=? COLLATE NOCASE', (others[0], uid, path))
+            else:
+                c.execute('DELETE FROM detections WHERE fileUid=?', (uid,))
+                c.execute('DELETE FROM files WHERE uid=?', (uid,))
+            c.commit()
+            return len(others)
+        except Exception:
+            c.rollback()
+            raise
+
+
     def renameFile(self, path, newName, allCopies=False):
         """Rename physical copies and their aliases, preserving content identity.
 

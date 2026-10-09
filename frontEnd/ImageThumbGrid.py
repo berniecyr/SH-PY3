@@ -134,6 +134,9 @@ myEVT_THUMB_SELECTED = wx.NewEventType()
 EVT_THUMB_SELECTED = wx.PyEventBinder(myEVT_THUMB_SELECTED, 1)
 myEVT_THUMB_READY = wx.NewEventType()
 EVT_THUMB_READY = wx.PyEventBinder(myEVT_THUMB_READY, 1)
+# A tile was double-clicked: open it large.
+myEVT_THUMB_ACTIVATED = wx.NewEventType()
+EVT_THUMB_ACTIVATED = wx.PyEventBinder(myEVT_THUMB_ACTIVATED, 1)
 
 
 ##############################################################################
@@ -252,6 +255,7 @@ class ImageThumbGrid(wx.ScrolledWindow):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDClick)
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         self.Bind(wx.EVT_SCROLLWIN, self.OnScrollWin)
         self.Bind(wx.EVT_WINDOW_DESTROY, self._onDestroy)
@@ -302,6 +306,9 @@ class ImageThumbGrid(wx.ScrolledWindow):
         for i, tile in enumerate(self._tiles):
             if tile.path == path:
                 self._setSelection(i, notify=False)
+                # Scroll even when it was already selected: the grid may have
+                # been hidden behind the large view while the user moved on.
+                self._scrollIntoView(i)
                 return True
         return False
 
@@ -553,6 +560,21 @@ class ImageThumbGrid(wx.ScrolledWindow):
         # event -- with lazy analysis, a stray event is a stray detection run.
         if index >= 0:
             self._setSelection(index)
+
+
+    def OnLeftDClick(self, event):
+        """Ask the parent to open the double-clicked tile large.
+
+        @param  event  The EVT_LEFT_DCLICK event.
+        """
+        index = self._hitTest(event.GetX(), event.GetY())
+        if index < 0:
+            return
+        self._setSelection(index)
+        activated = ThumbSelectedEvent(myEVT_THUMB_ACTIVATED, self.GetId(),
+                                       self._tiles[index].path)
+        activated.SetEventObject(self)
+        self.GetEventHandler().ProcessEvent(activated)
 
 
     def selectAtPosition(self, position):
