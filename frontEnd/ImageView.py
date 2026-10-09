@@ -698,7 +698,9 @@ class ImageView(BaseView):
         answer = wx.MessageBox(
             'Move this file to the Recycle Bin and remove it from the image '
             'database?\n\n%s' % path, 'Delete file',
-            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING, self)
+            # Yes is the default, so Delete then Enter deletes; the file can
+            # still be restored from the Recycle Bin.
+            wx.YES_NO | wx.YES_DEFAULT | wx.ICON_WARNING, self)
         if answer != wx.YES:
             self._largeView.SetFocus()
             return

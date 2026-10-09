@@ -112,10 +112,13 @@ def main():
 
             # Delete, answered No: nothing happens.
             wheel(view, -120); wheel(view, -120)
-            with patch('wx.MessageBox', return_value=wx.NO), \
+            with patch('wx.MessageBox', return_value=wx.NO) as box, \
                  patch('frontEnd.RecycleBin.recycle', side_effect=lambda path, hwnd=None: recycled.append(path)):
                 key(view, wx.WXK_DELETE)
             assert recycled == [] and view._files == paths
+            # Yes is the default button, so Enter confirms.
+            style = box.call_args[0][2]
+            assert style & wx.YES_NO and not style & wx.NO_DEFAULT, hex(style)
 
             # Delete, answered Yes: recycled, forgotten, and the NEXT file shows.
             def fakeRecycle(path, hwnd=None):
