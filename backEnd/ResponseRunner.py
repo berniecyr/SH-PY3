@@ -1909,6 +1909,11 @@ class ResponseRunner(object):
         if savedPath:
             actionCtx.setStatus(True, "saved to %s objs=%s%s" %
                                 (savedPath, str(objList), note))
+            # The camera has already analysed this frame, so the Images tab
+            # gets the snapshot with those results rather than re-running it.
+            from backEnd.UserMediaSnapshotImport import recordSnapshot
+            recordSnapshot(dataMgr, camLoc, savedPath, previewMs, img,
+                           objList, self._logger)
         else:
             actionCtx.setStatus(False, "failed to write snapshot")
         return None

@@ -1448,6 +1448,31 @@ class DataManager(object):
 
 
     ###########################################################
+    def getObjectBoxesNearTime(self, camLoc, ms, windowMs):
+        """Every object of one camera tracked near a moment, and where.
+
+        @param  camLoc    The camera location.
+        @param  ms        The absolute ms of interest.
+        @param  windowMs  How far either side of ms to look.
+        @return boxes     {objId: (x1, y1, x2, y2)} in processing-size pixels,
+                          each object's tracked box nearest to ms.
+        """
+        assert self._connection is not None
+        rows = self._cur.execute(
+            '''SELECT m.objUid, m.x1, m.y1, m.x2, m.y2, m.time FROM motion m '''
+            '''JOIN objects o ON o.uid = m.objUid '''
+            '''WHERE o.camLoc = ? AND o.timeStop >= ? AND o.timeStart <= ? '''
+            '''AND m.time BETWEEN ? AND ?''',
+            (camLoc, int(ms - windowMs), int(ms + windowMs),
+             int(ms - windowMs), int(ms + windowMs))).fetchall()
+        nearest = {}
+        for objId, x1, y1, x2, y2, t in rows:
+            if objId not in nearest or abs(t - ms) < nearest[objId][0]:
+                nearest[objId] = (abs(t - ms), (x1, y1, x2, y2))
+        return {objId: box for objId, (_, box) in nearest.items()}
+
+
+    ###########################################################
     def getObjectRangesBetweenTimes(self, startTime=None, endTime=None):
         """Retrieve time ranges for an object between the given times.
 
