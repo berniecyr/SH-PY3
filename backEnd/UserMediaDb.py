@@ -714,6 +714,39 @@ class UserMediaDb(object):
 
 
     ###########################################################
+    def getRecord(self, path):
+        """Every stored column for one file, grouped by table, for display.
+
+        @param  path  Absolute path.
+        @return list  [(section title, [(field, value), ...]), ...] covering
+                      the files row, each file_locations row and each
+                      detection; empty if the file has no record.
+        """
+        row = self.getFile(path)
+        if row is None:
+            return []
+        uid = row["uid"]
+        fields = lambda record: [(name, record[name]) for name in record.keys()]
+
+        sections = []
+        fileRow = self._conn.execute("SELECT * FROM files WHERE uid = ?",
+                                     (uid,)).fetchone()
+        if fileRow is not None:
+            sections.append(("File", fields(fileRow)))
+        for location in self._conn.execute(
+                "SELECT * FROM file_locations WHERE fileUid = ? ORDER BY path",
+                (uid,)):
+            sections.append(("Location", fields(location)))
+        detections = self._conn.execute(
+            "SELECT * FROM detections WHERE fileUid = ? ORDER BY atMs, uid",
+            (uid,)).fetchall()
+        for index, detection in enumerate(detections, 1):
+            sections.append(("Detection %d of %d" % (index, len(detections)),
+                             fields(detection)))
+        return sections
+
+
+    ###########################################################
     def getFaceNames(self):
         """Distinct recognized names available in saved Image analysis results."""
         return [r['faceName'] for r in self._conn.execute(

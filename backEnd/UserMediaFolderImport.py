@@ -51,6 +51,32 @@ def importFolder(root, db, lock, cfg, client=None, analyze=False,
     Filenames-only never contacts a detector or clears shared results/text.
     The caller owns the connection and serializes its other access with lock.
     """
+    return _importPaths(lambda failed: folderFiles(root, cancelled, failed),
+                        db, lock, cfg, client, analyze, cancelled, progress,
+                        logger, pause)
+
+
+def selectedFiles(paths):
+    """Yield the supported media files among explicitly chosen paths."""
+    for path in paths:
+        if (os.path.isfile(path)
+                and path.lower().endswith(UserMediaAnalysis.kImageExts
+                                          + UserMediaAnalysis.kVideoExts)):
+            yield path
+
+
+def importFiles(paths, db, lock, cfg, client=None, analyze=False,
+                cancelled=lambda: False, progress=lambda counts: None,
+                logger=None, pause=lambda: None):
+    """importFolder for an explicit list of files instead of a folder tree."""
+    return _importPaths(lambda failed: selectedFiles(paths),
+                        db, lock, cfg, client, analyze, cancelled, progress,
+                        logger, pause)
+
+
+def _importPaths(source, db, lock, cfg, client, analyze, cancelled, progress,
+                 logger, pause):
+    """Shared body: source(failed) yields the files to register."""
     counts = dict(registered=0, analyzed=0, reused=0, failed=0)
     signature = UserMediaAnalysis.modelSignature(cfg) if analyze else None
 
@@ -59,7 +85,7 @@ def importFolder(root, db, lock, cfg, client=None, analyze=False,
         if logger:
             logger.warning('Folder import: %s' % exc)
 
-    for path in folderFiles(root, cancelled, failed):
+    for path in source(failed):
         try:
             with lock:
                 db.registerContent(path)

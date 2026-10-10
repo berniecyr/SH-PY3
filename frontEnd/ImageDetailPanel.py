@@ -183,12 +183,16 @@ class ImageDetailPanel(wx.Panel):
 
     ###########################################################
     def __init__(self, parent, logger, analyzeCallback=None,
-                 loadDescriptions=None, saveDescriptions=None):
+                 loadDescriptions=None, saveDescriptions=None,
+                 recordCallback=None, selectionCount=None):
         """Initializer for ImageDetailPanel.
 
         @param  parent           The parent window.
         @param  logger           A logger, for decode failures.
         @param  analyzeCallback  f(path) -- called when Analyze is clicked.
+        @param  recordCallback   f(path) -- called when View record is clicked.
+        @param  selectionCount   f() -- how many files are selected; View
+                                 record is offered only for exactly one.
         """
         super(ImageDetailPanel, self).__init__(
             parent, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize,
@@ -198,6 +202,8 @@ class ImageDetailPanel(wx.Panel):
         self._analyzeCallback = analyzeCallback
         self._loadDescriptions = loadDescriptions
         self._saveDescriptions = saveDescriptions
+        self._recordCallback = recordCallback
+        self._selectionCount = selectionCount
         self._descriptionDrafts = {}
         self._path = None
         self._isVideo = False
@@ -275,9 +281,19 @@ class ImageDetailPanel(wx.Panel):
         makeFontDefault(self._nudityText)
         sizer.Add(self._nudityText, 0, wx.EXPAND | wx.TOP, _kBorder)
 
+        buttonSizer = wx.BoxSizer(wx.HORIZONTAL)
         self._analyzeButton = wx.Button(self, -1, "Analyze this file")
         self._analyzeButton.Bind(wx.EVT_BUTTON, self._onAnalyze)
-        sizer.Add(self._analyzeButton, 0, wx.TOP | wx.BOTTOM, _kBorder)
+        buttonSizer.Add(self._analyzeButton, 0, wx.RIGHT, _kCtrlPadding)
+        # Enabled on UI update rather than on selection events: Ctrl- and
+        # Shift-clicks change the grid's selection without firing one.
+        self._recordButton = wx.Button(self, -1, "View record...")
+        self._recordButton.SetToolTip("Show every stored field for the selected file")
+        self._recordButton.Bind(wx.EVT_BUTTON, self._onViewRecord)
+        self._recordButton.Bind(wx.EVT_UPDATE_UI, self._onUpdateRecordButton)
+        self._recordButton.Show(self._recordCallback is not None)
+        buttonSizer.Add(self._recordButton, 0)
+        sizer.Add(buttonSizer, 0, wx.TOP | wx.BOTTOM, _kBorder)
 
         self._statusText = TranslucentStaticText(self, -1, "")
         makeFontDefault(self._statusText)
@@ -646,6 +662,32 @@ class ImageDetailPanel(wx.Panel):
         event.Skip()
         if self._path and self._analyzeCallback is not None:
             self._analyzeCallback(self._path)
+
+
+    ###########################################################
+    def _onUpdateRecordButton(self, event):
+        """Offer View record only for a single selected file.
+
+        @param  event  The EVT_UPDATE_UI event.
+        """
+        count = 1
+        if self._selectionCount is not None:
+            try:
+                count = self._selectionCount()
+            except Exception:
+                count = 0
+        event.Enable(bool(self._path) and count == 1)
+
+
+    ###########################################################
+    def _onViewRecord(self, event):
+        """View record was clicked.
+
+        @param  event  The EVT_BUTTON event.
+        """
+        event.Skip()
+        if self._path and self._recordCallback is not None:
+            self._recordCallback(self._path)
 
 
     ###########################################################

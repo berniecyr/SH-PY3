@@ -71,6 +71,8 @@ wxPython ships a thumbnail browser and it was rejected after reading its source
   * **A disk cache** under <dataDir>\usermedia\thumbs, keyed by path, mtime,
     size and thumbnail size, so a second visit to a folder is near-instant.
     Deliberately NOT under videos\ -- see UserMediaDb for why that matters.
+    Spread over 256 subfolders, indexed, and cleaned of thumbnails whose
+    original is gone by a background pass -- see ImageThumbCache.
 
 ### Public surface
 
@@ -81,7 +83,6 @@ what makes that a contained change.
 """
 
 # Python imports...
-import hashlib
 import os
 import queue
 import subprocess
@@ -94,6 +95,9 @@ import wx
 # Toolbox imports...
 
 # Local imports...
+from frontEnd.ImageThumbCache import (getThumbCacheDir, cacheKey, shardPath,
+                                     findThumb, recordThumb,
+                                     startMaintenance, stopMaintenance)
 
 
 # Constants...
@@ -166,39 +170,6 @@ def drawVideoBadge(dc, x, y):
                     wx.Point(cx + 4, cy)])
 
 
-def getThumbCacheDir():
-    """Where cached thumbnails live.
-
-    Under the data directory, NOT under videos\\ -- DiskCleaner walks that tree
-    and deletes anything in it with no clipdb row.
-
-    @return  Absolute path; created if needed.
-    """
-    from appCommon.InstallPaths import getUserDataDir
-    path = os.path.join(getUserDataDir(), "usermedia", "thumbs")
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
-##############################################################################
-def _cacheKey(path, size):
-    """A cache file name that changes when the source or the size does.
-
-    @param  path  Absolute path of the source file.
-    @param  size  Thumbnail size in pixels.
-    @return str   A file name.
-    """
-    try:
-        stat = os.stat(path)
-        stamp = "%d-%d" % (stat.st_size, int(stat.st_mtime))
-    except OSError:
-        stamp = "missing"
-    digest = hashlib.sha1(
-        ("%s|%s|%d" % (path, stamp, size)).encode("utf-8", "replace")
-    ).hexdigest()
-    return digest + ".jpg"
-
-
 ##############################################################################
 class _Tile(object):
     """One file's place in the grid."""
@@ -247,6 +218,10 @@ class ImageThumbGrid(wx.ScrolledWindow):
         self._queuedLock = threading.Lock()
         self._stopEvent = threading.Event()
         self._worker = None
+
+        # Background tidy of the disk cache.  Returns at once; the thread
+        # waits a minute before touching the disk so startup never pays.
+        startMaintenance(logger, thumbSize)
 
         # It paints every pixel it owns, so let AppColors leave it alone --
         # applyToTree repairs contrast only on wx.StaticText, and a recoloured
@@ -373,6 +348,7 @@ class ImageThumbGrid(wx.ScrolledWindow):
     ###########################################################
     def stop(self):
         """Stop the decode thread.  Safe to call more than once."""
+        stopMaintenance()
         self._stopEvent.set()
         self._drainQueue()
         worker = self._worker
@@ -836,20 +812,25 @@ class ImageThumbGrid(wx.ScrolledWindow):
         @param  size     Thumbnail size in pixels.
         @return          Raw JPEG/PNG bytes, or None.
         """
-        cachePath = os.path.join(getThumbCacheDir(), _cacheKey(path, size))
-        if os.path.isfile(cachePath):
+        name, stat = cacheKey(path, size)
+        cached = findThumb(name)
+        if cached is not None:
             try:
-                with open(cachePath, "rb") as f:
+                with open(cached, "rb") as f:
                     return f.read()
             except OSError:
+                # Removed by the cleanup pass between the check and the open;
+                # just make it again.
                 pass
 
+        cachePath = shardPath(name, create=True)
         if isVideo:
             self._extractVideoFrame(path, cachePath, size)
         else:
             self._shrinkImage(path, cachePath, size)
 
         if os.path.isfile(cachePath):
+            recordThumb(name, path, stat, size, self._logger)
             with open(cachePath, "rb") as f:
                 return f.read()
         return None

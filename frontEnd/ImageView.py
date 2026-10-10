@@ -173,6 +173,32 @@ def _isMediaFile(name):
 
 # Keys this tab handles itself, which a Tools menu shortcut would otherwise
 # take first on Windows (even with the item disabled).
+def _listMediaRecursive(path):
+    """Return media files under a folder and all of its subfolders.
+
+    Paths are relative to path (so os.path.join(path, name) works the same
+    as for a plain listdir), sorted case-insensitively.  Dot-prefixed
+    folders are skipped, matching what "Add folder to database" skips;
+    unreadable subfolders are skipped silently.
+
+    @param  path  Absolute path of the folder.
+    @return names Relative paths of the media files found.
+    """
+    # Let the top-level folder raise like os.listdir would, so an
+    # unreadable folder still gets "This folder can't be read."
+    os.listdir(path)
+    names = []
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
+        rel = os.path.relpath(root, path)
+        for name in files:
+            if _isMediaFile(name):
+                names.append(name if rel == os.curdir
+                             else os.path.join(rel, name))
+    names.sort(key=lambda n: n.lower())
+    return names
+
+
 _kImageTabKeys = frozenset(('del', 'delete', 'ctrl+a'))
 
 
@@ -278,7 +304,9 @@ class ImageView(BaseView):
                                              self._logger,
                                              self._onAnalyzeRequested,
                                              self._loadDescriptions,
-                                             self._saveDescriptions)
+                                             self._saveDescriptions,
+                                             self._viewRecord,
+                                             lambda: len(self._fileList.getSelectedPaths()))
 
         self._buildListPanel()
 
@@ -361,6 +389,11 @@ class ImageView(BaseView):
         # a tree that shrinks to nothing is less useful than one that scrolls.
         self._dirCtrl.SetMinSize((-1, _kMinTreeHeight))
         sizer.Add(self._dirCtrl, 1, wx.EXPAND | wx.BOTTOM, _kCtrlPadding)
+
+        # Off by default: a folder lists only its own files unless asked.
+        self._includeSubfolders = wx.CheckBox(self._leftPanel, -1,
+                                              "Include subfolders")
+        sizer.Add(self._includeSubfolders, 0, wx.BOTTOM, _kCtrlPadding)
 
         self._analyzeButton = wx.Button(self._leftPanel, -1,
                                         "Add folder to database")
@@ -481,6 +514,8 @@ class ImageView(BaseView):
         self._dirCtrl.Bind(wx.EVT_DIRCTRL_SELECTIONCHANGED,
                            self.OnFolderChanged)
         self._analyzeButton.Bind(wx.EVT_BUTTON, self.OnAnalyzeFolder)
+        self._includeSubfolders.Bind(wx.EVT_CHECKBOX,
+                                     self.OnIncludeSubfoldersChanged)
         for check in self._filterChecks.values():
             check.Bind(wx.EVT_CHECKBOX, self.OnFilterChanged)
         self._faceNameChoice.Bind(wx.EVT_CHOICE, self.OnFilterChanged)
@@ -507,7 +542,10 @@ class ImageView(BaseView):
             return
 
         try:
-            names = sorted(os.listdir(path), key=lambda n: n.lower())
+            if self._includeSubfolders.GetValue():
+                names = _listMediaRecursive(path)
+            else:
+                names = sorted(os.listdir(path), key=lambda n: n.lower())
         except OSError as e:
             # An unreadable folder is ordinary (a system directory, a
             # disconnected drive), so it is a label, not a dialog.
@@ -539,7 +577,9 @@ class ImageView(BaseView):
             # disagreeing.
             self._folderLabel.SetLabel(os.path.basename(path) or path)
             self._setEmptyMessage(
-                "No photos or videos in this folder.\n\n"
+                ("No photos or videos in this folder or its subfolders.\n\n"
+                 if self._includeSubfolders.GetValue() else
+                 "No photos or videos in this folder.\n\n") +
                 "Looking for:\n"
                 "   %s\n   %s"
                 % (", ".join(e[1:] for e in _kImageExts),
@@ -577,6 +617,17 @@ class ImageView(BaseView):
         """
         event.Skip()
         self._listFolder(self._dirCtrl.GetPath())
+
+
+    ###########################################################
+    def OnIncludeSubfoldersChanged(self, event):
+        """The Include subfolders box was toggled; relist the current folder.
+
+        @param  event  The EVT_CHECKBOX event.
+        """
+        event.Skip()
+        if self._currentDir:
+            self._listFolder(self._currentDir)
 
 
     ###########################################################
@@ -646,6 +697,12 @@ class ImageView(BaseView):
         return [
             ('Show in Explorer', 1, 1, lambda paths: self._showInExplorer(paths[0])),
             ('Rename file...', 1, 1, lambda paths: self._renameFile(paths[0])),
+            ('View record...', 1, 1, lambda paths: self._viewRecord(paths[0])),
+            None,
+            ('Add files with analysis', 1, None,
+             lambda paths: self._addSelectionToDb(paths, analyze=True)),
+            ('Add filenames only (no new detections)', 1, None,
+             lambda paths: self._addSelectionToDb(paths, analyze=False)),
             None,
             ('Delete selection', 1, None, self._deletePaths),
             None,
@@ -1143,7 +1200,9 @@ class ImageView(BaseView):
             # heading then contradicts the pane underneath it.
             self._setEmptyMessage(None if self._files else
                                   ("This selection has no available files." if selection is not None else
-                                   "No photos or videos directly in this folder."))
+                                   ("No photos or videos in this folder or its subfolders."
+                                    if self._includeSubfolders.GetValue() else
+                                    "No photos or videos directly in this folder.")))
             return
 
         db = self._getDb()
@@ -1292,6 +1351,30 @@ class ImageView(BaseView):
                                  cancel=self._folderCancel))
 
 
+    def _addSelectionToDb(self, paths, analyze):
+        """Right-click counterpart of "Add folder to database" for the
+        selected files only.  Same worker, same duplicate linking and the
+        same Stop button.
+        """
+        if self._scanning:
+            wx.MessageBox("An import or scan is already running. Stop it with "
+                          "the Stop button first.", "Add to database",
+                          wx.OK | wx.ICON_INFORMATION, self)
+            return
+        if self._getDb() is None:
+            self._scanStatus.SetLabel("No database; cannot store results.")
+            return
+        self._scanning = True
+        self._folderCancel = threading.Event()
+        self._analyzeButton.SetLabel("Stop")
+        self._analyzeButton.Enable(True)
+        self._scanStatus.SetLabel("Preparing import of %d file(s)..." % len(paths))
+        self._leftPanel.Layout()
+        self._ensureWorker()
+        self._workQueue.put(dict(paths=list(paths), analyze=analyze,
+                                 cancel=self._folderCancel))
+
+
     def _confirmFolderModels(self, missing, response, ready, cancel):
         try:
             if cancel.is_set() or self._stopEvent.is_set():
@@ -1337,8 +1420,12 @@ class ImageView(BaseView):
             db = self._getDb()
             if db is None:
                 raise RuntimeError("User media database unavailable")
-            counts = UserMediaFolderImport.importFolder(
-                job['root'], db, self._dbLock, cfg, client, job['analyze'],
+            # A right-click selection import carries 'paths' instead of 'root'.
+            importer, source = ((UserMediaFolderImport.importFiles, job['paths'])
+                                if 'paths' in job else
+                                (UserMediaFolderImport.importFolder, job['root']))
+            counts = importer(
+                source, db, self._dbLock, cfg, client, job['analyze'],
                 cancelled=cancelled, logger=self._logger,
                 progress=lambda c: self._post(self._folderProgress, cancel, c),
                 pause=lambda: cancel.wait(_kScanGapSecs))
@@ -1424,6 +1511,35 @@ class ImageView(BaseView):
             raise RuntimeError("The user media database is unavailable")
         with self._dbLock:
             db.saveDescriptions(path, tags, description)
+
+
+    ###########################################################
+    def _viewRecord(self, path):
+        """Show every stored field for one file in a read-only dialog.
+
+        @param  path  Absolute path.
+        """
+        db = self._getDb()
+        if db is None:
+            wx.MessageBox("The user media database is unavailable.",
+                          "View record", wx.OK | wx.ICON_INFORMATION, self)
+            return
+        try:
+            with self._dbLock:
+                sections = db.getRecord(path)
+        except Exception:
+            self._logger.warning("ImageView: record lookup failed: %s"
+                                 % traceback.format_exc())
+            wx.MessageBox("Could not read this file's record.",
+                          "View record", wx.OK | wx.ICON_ERROR, self)
+            return
+
+        from frontEnd.ImageRecordDialog import ImageRecordDialog
+        dialog = ImageRecordDialog(self.GetTopLevelParent(), path, sections)
+        try:
+            dialog.ShowModal()
+        finally:
+            dialog.Destroy()
 
 
     ###########################################################
@@ -1671,6 +1787,8 @@ class ImageView(BaseView):
             setFrontEndPref("imageViewSashPos2",
                             self._rightSplitterWindow.GetSashPosition(0))
             setFrontEndPref("imageViewLastFolder", self._currentDir)
+            setFrontEndPref("imageViewIncludeSubfolders",
+                            self._includeSubfolders.GetValue())
             setFrontEndPref("imageViewThumbSize",
                             self._fileList.getThumbSize())
         except Exception:
@@ -1715,6 +1833,9 @@ class ImageView(BaseView):
             pos2 = max(_kMinListWidth, rightWidth - _kDefaultDetailWidth)
 
         self._rightSplitterWindow.SetSashPosition(0, pos2)
+
+        self._includeSubfolders.SetValue(
+            bool(getFrontEndPref("imageViewIncludeSubfolders")))
 
         lastFolder = getFrontEndPref("imageViewLastFolder")
         if lastFolder and os.path.isdir(lastFolder):

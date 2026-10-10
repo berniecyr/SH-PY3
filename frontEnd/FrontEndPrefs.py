@@ -148,6 +148,7 @@ _kDefaultPrefs = {
     "imageViewSashPos2" : None,
     "imageViewLastFolder" : "",
     "imageViewThumbSize" : 128,
+    "imageViewIncludeSubfolders" : False,
     "imageViewSampleSecs" : 2.0,
 
     # Enable audio playback if available
